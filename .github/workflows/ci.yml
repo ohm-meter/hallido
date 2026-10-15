@@ -1,0 +1,40 @@
+name: CI
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Format check
+        run: test -z "$(gofmt -l cmd internal)" || (echo 'gofmt needed'; gofmt -l cmd internal; exit 1)
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race ./...
+      - name: Install layout (shell + migration in a container)
+        run: |
+          ./scripts/test/install-layout.sh
+          ./scripts/test/install-migration-docker.sh
+      - name: API smoke test (mock)
+        run: ./scripts/test/api-smoke.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: GUI tests (static + layout)
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+          make test-gui
+      - name: Cross-compile Pi (arm64, armv7)
+        run: |
+          GOOS=linux GOARCH=arm64 go build ./cmd/server
+          GOOS=linux GOARCH=arm GOARM=7 go build ./cmd/server

@@ -1,0 +1,1091 @@
+openapi: 3.0.3
+info:
+  title: Sonos Radio Agent API
+  version: "1.0.0"
+  description: >
+    REST API for starting radio scenes on multiple Sonos speakers.
+    Used by the bundled GUI and by home automation tools (Homey).
+servers:
+  - url: http://raspberrypi.local:8080
+    description: Example Pi on the LAN
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/health:
+    get:
+      summary: Status and reachable speakers
+      security: []   # public, no token
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  speakers_online: { type: integer, example: 2 }
+                  speakers:
+                    type: array
+                    items: { type: string }
+                  discovery_error: { type: string }
+  /api/v1/scenes:
+    get:
+      summary: List configured scenes
+      responses:
+        "200":
+          description: List of scenes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenes:
+                    type: array
+                    items: { $ref: "#/components/schemas/Scene" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/speakers:
+    get:
+      summary: Speakers found on the LAN (discovery)
+      responses:
+        "200":
+          description: Structured discovery list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  speakers:
+                    type: array
+                    items: { $ref: "#/components/schemas/SpeakerInfo" }
+                  discovery_error:
+                    type: string
+                    description: Empty on success; otherwise a hint (e.g. SSDP blocked)
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/sonos/favorites:
+    get:
+      summary: Read Sonos favorites from ContentDirectory FV:2
+      description: >
+        Only with the sonos driver. Optional query speaker=name; otherwise non-TV zones first,
+        and on a browse error the next reachable speaker is tried automatically.
+        integratable=true if the URI can be used as a stream scene (not Spotify);
+        playable=true if it can be played as a scene (additionally TuneIn stations, ADR 0018).
+      parameters:
+        - name: speaker
+          in: query
+          schema: { type: string }
+          description: Proxy speaker for the ContentDirectory browse
+      responses:
+        "200":
+          description: Favorites list (with discovery_error on a browse error)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  favorites:
+                    type: array
+                    items: { $ref: "#/components/schemas/FavoriteEntry" }
+                  speaker: { type: string }
+                  discovery_error: { type: string }
+        "400":
+          description: e.g. mock driver active
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/radio/search:
+    get:
+      summary: Search internet radio stations (Radio Browser proxy)
+      description: >
+        Proxy to de1.api.radio-browser.info. Only stations with a non-empty URL
+        and IsIntegratableStreamURI. Timeout 5 s. Error: radio_search_failed.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        "200":
+          description: Filtered station list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stations:
+                    type: array
+                    items: { $ref: "#/components/schemas/RadioStation" }
+        "400":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "502":
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/speakers/stream-sources:
+    get:
+      summary: Speakers with an integrable stream (bulk, filtered)
+      description: >
+        Like now-playing, but only entries whose URI is usable as a scene stream
+        per IsIntegratableStreamURI (not Spotify, group, VLI).
+      responses:
+        "200":
+          description: Integrable stream sources per speaker
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  speakers:
+                    type: array
+                    items: { $ref: "#/components/schemas/NowPlayingInfo" }
+                  discovery_error:
+                    type: string
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/speakers/now-playing:
+    get:
+      summary: Now playing on all found speakers (bulk)
+      description: >
+        Returns transport state and metadata per speaker in one call — for GUI polling
+        without N individual requests.
+      responses:
+        "200":
+          description: Now playing per speaker
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  speakers:
+                    type: array
+                    items: { $ref: "#/components/schemas/NowPlayingInfo" }
+                  discovery_error:
+                    type: string
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/speakers/{name}/now-playing:
+    get:
+      summary: Current playback of a speaker (now playing)
+      description: >
+        Reads transport state and metadata via UPnP/SOAP (GetMediaInfo,
+        GetPositionInfo). Works for anything the speaker is already playing —
+        including Spotify or Sonos Radio, as long as the Sonos app is playing.
+        Does not start any account-bound services.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Exact speaker name as in the Sonos app (URL-encoded)
+          schema: { type: string }
+      responses:
+        "200":
+          description: Now-playing information
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NowPlayingInfo" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "502":
+          description: Speaker unreachable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/speakers/{name}/volume:
+    put:
+      summary: Set a speaker's volume live
+      description: >
+        Sets the absolute volume (0-100) via RenderingControl. Used by the
+        GUI's volume sheet; does not change the starting volume stored in
+        the scene.
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Exact speaker name as in the Sonos app (URL-encoded)
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [volume]
+              additionalProperties: false
+              properties:
+                volume: { type: integer, minimum: 0, maximum: 100 }
+      responses:
+        "200":
+          description: Volume set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  speaker: { type: string }
+                  volume: { type: integer }
+        "400":
+          description: Body missing/invalid or volume outside 0-100 (bad_request)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "502":
+          description: Speaker unreachable (speaker_unreachable)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/scenes/status:
+    get:
+      summary: Playback status of all scenes
+      description: >
+        Queries the coordinator's transport and now playing per scene. state:
+        playing (transport active and source matches the scene),
+        playing_other (transport active, different content),
+        stopped, paused, unknown, offline.
+      responses:
+        "200":
+          description: Status per scene
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scenes:
+                    type: array
+                    items: { $ref: "#/components/schemas/ScenePlaybackStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/discovery/refresh:
+    post:
+      summary: Re-run discovery
+      description: >
+        Runs the SSDP/fixed-IP refresh and returns the structured speaker list.
+        Rate-limited like other API calls.
+      responses:
+        "200":
+          description: Updated discovery list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  speakers:
+                    type: array
+                    items: { $ref: "#/components/schemas/SpeakerInfo" }
+                  discovery_error:
+                    type: string
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/config:
+    get:
+      summary: Config overview (token not included in the response)
+      description: >
+        Returns listen, scene IDs and speaker names from config.json.
+        api_token is never returned.
+      responses:
+        "200":
+          description: Reduced config view
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  listen: { type: string, example: ":8080" }
+                  scene_ids:
+                    type: array
+                    items: { type: string }
+                  speaker_names:
+                    type: array
+                    items: { type: string }
+                  scenes_count: { type: integer }
+                  speakers_count: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/config/speakers/sync:
+    post:
+      summary: Save found speakers to config.json (merge)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [speakers]
+              properties:
+                speakers:
+                  type: array
+                  items:
+                    type: object
+                    required: [name]
+                    properties:
+                      name: { type: string }
+                      ip: { type: string }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  speakers_updated: { type: integer }
+                  restart_hint:
+                    type: string
+                    description: Hot reload is active; a restart is only needed for listen or --driver
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/config/scenes/from-favorite:
+    post:
+      summary: Create a scene from a Sonos favorite (stream or TuneIn)
+      description: >
+        Reads the favorite by favorite_id (from GET /sonos/favorites). integratable=true:
+        normalizes the URI and saves type stream. Otherwise playable=true
+        (TuneIn, x-sonosapi-stream): saves type favorite with name=title and
+        uri=favorite URI (ADR 0018). Spotify/Amazon/Sonos Radio: 400.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scene_id, name, favorite_id, members]
+              properties:
+                scene_id: { type: string }
+                name: { type: string }
+                favorite_id: { type: string, example: "FV:2/9" }
+                speaker: { type: string, description: "optional proxy speaker" }
+                members:
+                  type: array
+                  items: { $ref: "#/components/schemas/Member" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  scene_id: { type: string }
+                  source_type: { type: string, enum: [stream, favorite] }
+                  source_uri: { type: string }
+                  restart_hint: { type: string }
+        "400":
+          description: Not importable or invalid request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/config/scenes:
+    post:
+      summary: Create or update a scene (upsert)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scene]
+              properties:
+                scene: { $ref: "#/components/schemas/Scene" }
+      responses:
+        "200":
+          description: Saved and hot-reloaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  scene_id: { type: string }
+                  restart_hint: { type: string }
+        "400":
+          description: Invalid scene or URI
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/config/scenes/{id}:
+    put:
+      summary: Replace an existing scene
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-z0-9][a-z0-9-]{0,63}$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, source, members]
+              properties:
+                name: { type: string }
+                source: { $ref: "#/components/schemas/Source" }
+                members:
+                  type: array
+                  items: { $ref: "#/components/schemas/Member" }
+      responses:
+        "200":
+          description: Saved and hot-reloaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  scene_id: { type: string }
+                  restart_hint: { type: string }
+        "400":
+          description: Invalid scene or URI
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Scene not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      summary: Remove a scene from config.json
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-z0-9][a-z0-9-]{0,63}$"
+      responses:
+        "200":
+          description: Deleted and hot-reloaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  scene_id: { type: string }
+                  deleted: { type: boolean }
+        "400":
+          description: Invalid scene ID or config writing disabled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Scene not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/scenes/{id}/play:
+    post:
+      summary: Start a scene
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Started (possibly with partial failure of individual speakers)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlayResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Scene not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "400":
+          description: Scene contains unknown speaker names
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502":
+          description: >-
+            Coordinator speaker unreachable (`speaker_unreachable`) or
+            playback does not start (`playback_failed`): the stream responds with
+            an HTTP error, or the coordinator does not report PLAYING within 6 s
+            after play (Sonos driver). `hint` names the detected content type,
+            the speaker state and, if applicable, a Sonos block of the station/HLS.
+            `result` may contain members with `ok: true` — the scene still isn't playing.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Error"
+                  - type: object
+                    properties:
+                      result: { $ref: "#/components/schemas/PlayResult" }
+  /api/v1/scenes/{id}/stop:
+    post:
+      summary: Stop a scene (AVTransport Stop on the coordinator)
+      description: |
+        Stops playback on the scene's first speaker; grouped speakers
+        follow. Does NOT check what is currently playing -- if the speaker is
+        already stopped, that is not an error (idempotent, e.g. for Homey flows).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Stopped
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scene_id: { type: string }
+                  stopped: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Scene not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502":
+          description: Coordinator unreachable (speaker_unreachable) or speaker rejects the request (playback_failed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/scenes/{id}/pause:
+    post:
+      summary: Pause a scene (AVTransport Pause on the coordinator)
+      description: |
+        Pauses playback on the scene's first speaker; the group follows.
+        For live streams, Sonos builds up a lag when resuming -- for
+        radio, Stop is usually the better choice. A schedule does not stop a
+        paused scene (its state is then no longer playing).
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Paused
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scene_id: { type: string }
+                  paused: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Scene not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502":
+          description: Coordinator unreachable (speaker_unreachable) or speaker rejects the request (playback_failed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/scenes/{id}/resume:
+    post:
+      summary: Resume a scene (AVTransport Play without a new source)
+      description: |
+        Resumes the source loaded on the coordinator (after pause or
+        stop). The source is NOT set again -- if something else has been loaded
+        in the meantime, that keeps playing. If nothing is loaded, the speaker
+        rejects the request (playback_failed); then use `POST /scenes/{id}/play`.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Resumed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scene_id: { type: string }
+                  resumed: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Scene not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502":
+          description: Coordinator unreachable (speaker_unreachable) or no source loaded / speaker rejects the request (playback_failed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/speakers/{name}/stop:
+    post:
+      summary: Stop a speaker's group (acts on the whole current group)
+      description: |
+        Determines the group the speaker is currently in via ZoneGroupTopology
+        -- whether built by a scene or in the Sonos app -- and sends the
+        command to its coordinator; all members follow. If the group is already stopped, that is not an error.
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string }, description: "Room name as in the Sonos app, URL-encoded" }
+      responses:
+        "200":
+          description: Command executed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupActionResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "502":
+          description: |
+            Speaker not in the topology / coordinator offline (speaker_unreachable)
+            or speaker rejects the request (playback_failed). If the group is known, it is in `result`.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Error" }
+                  - type: object
+                    properties:
+                      result: { $ref: "#/components/schemas/GroupActionResult" }
+  /api/v1/speakers/{name}/pause:
+    post:
+      summary: Pause a speaker's group (acts on the whole current group)
+      description: |
+        Determines the group the speaker is currently in via ZoneGroupTopology
+        -- whether built by a scene or in the Sonos app -- and sends the
+        command to its coordinator; all members follow. For live streams, Stop is usually the better choice.
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string }, description: "Room name as in the Sonos app, URL-encoded" }
+      responses:
+        "200":
+          description: Command executed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupActionResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "502":
+          description: |
+            Speaker not in the topology / coordinator offline (speaker_unreachable)
+            or speaker rejects the request (playback_failed). If the group is known, it is in `result`.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Error" }
+                  - type: object
+                    properties:
+                      result: { $ref: "#/components/schemas/GroupActionResult" }
+  /api/v1/speakers/{name}/resume:
+    post:
+      summary: Resume a speaker's group (acts on the whole current group)
+      description: |
+        Determines the group the speaker is currently in via ZoneGroupTopology
+        -- whether built by a scene or in the Sonos app -- and sends the
+        command to its coordinator; all members follow. Without a loaded source, the speaker rejects the request (playback_failed).
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string }, description: "Room name as in the Sonos app, URL-encoded" }
+      responses:
+        "200":
+          description: Command executed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GroupActionResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "502":
+          description: |
+            Speaker not in the topology / coordinator offline (speaker_unreachable)
+            or speaker rejects the request (playback_failed). If the group is known, it is in `result`.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Error" }
+                  - type: object
+                    properties:
+                      result: { $ref: "#/components/schemas/GroupActionResult" }
+  /api/v1/speakers/{name}/ungroup:
+    post:
+      summary: Remove a speaker from its group, or dissolve the group
+      description: |
+        Member: the speaker leaves the group (BecomeCoordinatorOfStandaloneGroup)
+        and is stopped afterwards; the group keeps playing.
+        Coordinator: the whole group is dissolved -- each member leaves
+        individually, the coordinator keeps playing alone (`dissolved: true`).
+        Standalone speaker: nothing to do (`standalone: true`).
+        Partial failure is not a hard error (200, error per speaker in `speakers`);
+        only if no speaker could leave the group does a 502 with `result` come back.
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Dissolved (possibly with partial failure)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UngroupResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "502":
+          description: Speaker not in the topology (speaker_unreachable) or all speakers rejected the request
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Error" }
+                  - type: object
+                    properties:
+                      result: { $ref: "#/components/schemas/UngroupResult" }
+  /api/v1/groups:
+    get:
+      summary: Current groups (topology) with the coordinator's state
+      description: |
+        All visible speakers, sorted by group (coordinator first in
+        `members`). A single speaker is a group with one member.
+        `scene_id` is set if the running source matches a scene with
+        this coordinator.
+      responses:
+        "200":
+          description: Group list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  groups:
+                    type: array
+                    items: { $ref: "#/components/schemas/GroupStatus" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "502":
+          description: No speaker answers the topology query (speaker_unreachable / playback_failed)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /api/v1/schedules:
+    get:
+      summary: Schedules with runtime status (next start/stop, last run)
+      responses:
+        "200":
+          description: Sorted by next start, disabled ones last
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timezone: { type: string, example: Europe/Vienna }
+                  now: { type: string, format: date-time }
+                  schedules:
+                    type: array
+                    items: { $ref: "#/components/schemas/ScheduleStatus" }
+        "400":
+          description: Scheduler not active
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/config/schedules:
+    get:
+      summary: Schedules from config.json
+      responses:
+        "200":
+          description: Schedules and time zone
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timezone: { type: string, example: Europe/Vienna }
+                  schedules:
+                    type: array
+                    items: { $ref: "#/components/schemas/Schedule" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      summary: Create or replace a schedule (same id)
+      description: Without an id, one is generated from the scene and start time (e.g. morning-radio-0610). Hot reload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [schedule]
+              properties:
+                schedule: { $ref: "#/components/schemas/Schedule" }
+      responses:
+        "200":
+          description: Saved and hot-reloaded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduleSaved" }
+        "400":
+          description: Invalid schedule (day, time, unknown scene, unknown field)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/config/schedules/{id}:
+    put:
+      summary: Replace an existing schedule (e.g. on/off)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[a-z0-9][a-z0-9-]{0,63}$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Schedule"
+      responses:
+        "200":
+          description: Saved and hot-reloaded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduleSaved" }
+        "400":
+          description: Invalid schedule or id in the body differs from the path
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Schedule not found (schedule_not_found)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      summary: Remove a schedule
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Deleted and hot-reloaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  schedule_id: { type: string }
+                  deleted: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Schedule not found (schedule_not_found)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    Unauthorized:
+      description: Token missing or invalid
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Source:
+      type: object
+      properties:
+        type: { type: string, enum: [stream, favorite] }
+        uri:
+          type: string
+          description: >
+            for type=stream the stream URL (required); for type=favorite optionally
+            the favorite URI (x-sonosapi-stream:…) for status matching
+        name:
+          type: string
+          maxLength: 200
+          description: "for type=favorite: favorite title as in the Sonos app (required)"
+    Member:
+      type: object
+      properties:
+        speaker: { type: string }
+        volume: { type: integer, minimum: 0, maximum: 100 }
+    SpeakerInfo:
+      type: object
+      properties:
+        name: { type: string }
+        ip: { type: string }
+        uid: { type: string }
+        reachable:
+          type: boolean
+          description: "false if the speaker's last probe (discovery/refresh/play) failed or the config IP yields no visible device (offline, invisible pair partner/satellite). Config speakers that have never been probed count as true until the first probe (lazy discovery)."
+    FavoriteEntry:
+      type: object
+      properties:
+        id: { type: string, example: "FV:2/21" }
+        title: { type: string }
+        uri: { type: string }
+        albumArt: { type: string }
+        integratable:
+          type: boolean
+          description: true if importable as a stream scene
+        playable:
+          type: boolean
+          description: >
+            true if playable as a scene: streams and radio favorites of a
+            Sonos service (TuneIn, x-sonosapi-stream). Not Spotify, Amazon, or
+            Sonos Radio (ADR 0018).
+    RadioStation:
+      type: object
+      properties:
+        name: { type: string }
+        url: { type: string }
+        country: { type: string }
+        tags: { type: string }
+    Scene:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        source: { $ref: "#/components/schemas/Source" }
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/Member" }
+    SpeakerStatus:
+      type: object
+      properties:
+        speaker: { type: string }
+        ok: { type: boolean }
+        error: { type: string }
+        hint: { type: string, description: Remediation hint when ok=false }
+    PlayResult:
+      type: object
+      properties:
+        scene_id: { type: string }
+        playing: { type: boolean }
+        speakers:
+          type: array
+          items: { $ref: "#/components/schemas/SpeakerStatus" }
+    GroupActionResult:
+      type: object
+      properties:
+        speaker: { type: string, description: speaker addressed }
+        coordinator: { type: string, description: speaker that received the command }
+        members:
+          type: array
+          items: { type: string }
+        action: { type: string, enum: [stop, pause, resume] }
+        ok: { type: boolean }
+    UngroupResult:
+      type: object
+      properties:
+        speaker: { type: string }
+        coordinator: { type: string }
+        dissolved: { type: boolean, description: "true: coordinator addressed, whole group dissolved" }
+        standalone: { type: boolean, description: "true: speaker was already standalone, nothing changed" }
+        speakers:
+          type: array
+          items: { $ref: "#/components/schemas/SpeakerStatus" }
+    GroupStatus:
+      type: object
+      properties:
+        coordinator: { type: string }
+        members:
+          type: array
+          items: { type: string }
+        state:
+          type: string
+          enum: [playing, stopped, paused, unknown, offline]
+        title: { type: string }
+        artist: { type: string }
+        uri: { type: string }
+        scene_id: { type: string }
+        error: { type: string }
+    ScenePlaybackStatus:
+      type: object
+      properties:
+        scene_id: { type: string }
+        coordinator: { type: string }
+        state:
+          type: string
+          enum: [playing, playing_other, stopped, paused, unknown, offline]
+        now_playing_title:
+          type: string
+          description: Title of the running source (for playing/playing_other, best effort)
+        error: { type: string }
+    NowPlayingInfo:
+      type: object
+      properties:
+        speaker: { type: string }
+        state:
+          type: string
+          enum: [playing, stopped, paused, unknown]
+        title: { type: string }
+        artist: { type: string }
+        album: { type: string }
+        uri: { type: string, description: "Sonos/UPnP URI of the current track (best effort)" }
+        source_uri:
+          type: string
+          description: >
+            loaded source (GetMediaInfo) when it differs from the track, for example
+            the TuneIn favorite URI while the track is a pre-roll
+        source_title: { type: string, description: "Title of the loaded source (for example station name)" }
+        raw:
+          type: string
+          description: "Raw metadata if DIDL parsing fails"
+    Schedule:
+      type: object
+      required: [scene, days, start]
+      properties:
+        id:
+          type: string
+          pattern: "^[a-z0-9][a-z0-9-]{0,63}$"
+          description: Optional on create (generated)
+        scene: { type: string, description: "ID of an existing scene" }
+        days:
+          type: array
+          minItems: 1
+          items: { type: string, enum: [mon, tue, wed, thu, fri, sat, sun] }
+        start: { type: string, pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$", example: "06:10" }
+        stop:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+          example: "08:30"
+          description: Optional. Before start = ends the next day. It only stops if the scene is still playing on its own.
+        enabled: { type: boolean, default: true }
+    ScheduleSaved:
+      type: object
+      properties:
+        ok: { type: boolean }
+        schedule_id: { type: string }
+        restart_hint: { type: string }
+    ScheduleStatus:
+      allOf:
+        - $ref: "#/components/schemas/Schedule"
+        - type: object
+          properties:
+            scene_name: { type: string }
+            active: { type: boolean, description: "currently within the start/stop window" }
+            next_start: { type: string, format: date-time }
+            next_stop:
+              type: string
+              format: date-time
+              description: End of the current window (active) or of the next one
+            last_run:
+              type: object
+              properties:
+                at: { type: string, format: date-time }
+                action:
+                  type: string
+                  enum: [start, stop, catch_up, stop_skipped, catch_up_skipped]
+                ok: { type: boolean }
+                detail: { type: string, description: "e.g. partial failure of individual speakers" }
+                error: { type: string }
+    Error:
+      type: object
+      properties:
+        error: { type: string, description: "stable code, e.g. speaker_unreachable, schedule_not_found, not_found (404), rate_limited (429, Retry-After header; 300 requests/min/IP)" }
+        message: { type: string }
+        speaker: { type: string }
+        hint: { type: string }

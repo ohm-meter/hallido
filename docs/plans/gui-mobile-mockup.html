@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hallido – Mobile Mockup</title>
+<style>
+:root{
+  --bg:#0d0c0a; --panel:#16140f; --panel-2:#1f1c14; --edge:#2c2820;
+  --ink:#f4ead3; --muted:#9a8f73; --amber:#ff9d2f; --on-amber:#1a1206;
+  --green:#6fcf6b; --red:#e8634a;
+  --tap-min:48px; --tap-primary:56px; --tap-gap:8px; --row-h:72px;
+  --bar-h:48px; --tabbar-h:64px; --radius-pill:9999px; --radius-row:12px;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#050504;color:var(--ink);font:17px/1.35 var(--sans);-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.phone{position:relative;width:min(100vw,390px);height:min(100dvh,844px);margin:0 auto;background:var(--bg);overflow:clip;display:flex;flex-direction:column}
+@media (min-width:500px){body{padding:24px 0}.phone{border:1px solid var(--edge);border-radius:28px}}
+/* Header */
+.bar{height:var(--bar-h);display:flex;align-items:center;gap:12px;padding:0 8px 0 16px;border-bottom:1px solid var(--edge);flex:none}
+.bar h1{font-size:17px;font-weight:650;flex:1}
+.status{font:12px var(--mono);color:var(--muted);display:flex;align-items:center;gap:6px;text-transform:uppercase;letter-spacing:.06em}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+.icon-btn{width:var(--tap-min);height:var(--tap-min);display:grid;place-items:center;border-radius:var(--radius-pill)}
+.icon-btn:active{background:var(--panel-2)}
+svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* Content */
+main{flex:1;overflow-y:auto;padding:12px 12px 16px}
+.view{display:none}.view.on{display:block}
+.label{font:12px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding:12px 4px 8px}
+.list{display:flex;flex-direction:column;gap:var(--tap-gap)}
+.row{min-height:var(--row-h);display:flex;align-items:center;gap:12px;padding:8px 4px 8px 8px;background:var(--panel);border:1px solid var(--edge);border-radius:var(--radius-row);position:relative;width:100%;text-align:left}
+.row.playing{border-color:#5a3d16;box-shadow:inset 3px 0 0 var(--amber)}
+.play{width:var(--tap-primary);height:var(--tap-primary);border-radius:50%;border:1px solid var(--edge);display:grid;place-items:center;flex:none;background:var(--panel-2)}
+.row.playing .play{background:var(--amber);border-color:var(--amber);color:var(--on-amber)}
+.play svg{width:22px;height:22px}
+.meta{flex:1;min-width:0}
+.name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub{font:12.5px var(--mono);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.state{font:11px var(--mono);color:var(--amber);text-transform:uppercase;letter-spacing:.08em}
+/* Now playing */
+.np{display:none;align-items:center;gap:12px;margin:0 8px 8px;padding:8px 8px 8px 16px;background:var(--panel-2);border:1px solid #5a3d16;border-radius:var(--radius-row);flex:none;min-height:64px}
+.np.on{display:flex}
+.np .meta{cursor:pointer}
+.stop{width:var(--tap-min);height:var(--tap-min);border-radius:50%;background:var(--amber);color:var(--on-amber);display:grid;place-items:center}
+.eq{display:inline-flex;gap:2px;align-items:flex-end;height:12px;margin-right:6px}
+.eq i{display:block;width:3px;background:var(--amber);animation:eq 1s infinite ease-in-out}
+.eq i:nth-child(2){animation-delay:.2s}.eq i:nth-child(3){animation-delay:.4s}
+@keyframes eq{0%,100%{height:3px}50%{height:12px}}
+@media (prefers-reduced-motion:reduce){.eq i{animation:none;height:8px}}
+/* Tabbar */
+nav{height:calc(var(--tabbar-h) + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--edge);background:var(--panel);flex:none}
+nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font:11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+nav button[aria-current="page"]{color:var(--amber)}
+/* Schedules */
+.time{font:600 22px var(--mono);letter-spacing:-.02em}
+.switch{width:var(--tap-min);height:var(--tap-min);display:grid;place-items:center;flex:none}
+.switch span{width:44px;height:26px;border-radius:13px;background:var(--edge);position:relative;transition:background .15s}
+.switch span::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--ink);transition:transform .15s}
+.switch[aria-checked="true"] span{background:var(--amber)}
+.switch[aria-checked="true"] span::after{transform:translateX(18px);background:var(--on-amber)}
+.next{padding:14px 16px;border-radius:var(--radius-row);border:1px dashed var(--edge);color:var(--muted);font-size:15px;margin-bottom:8px}
+.next b{color:var(--ink);font-weight:600}
+/* Boxes */
+.pill{min-height:var(--tap-min);padding:0 20px;border-radius:var(--radius-pill);border:1px solid var(--edge);display:inline-flex;align-items:center;gap:8px;font-size:15px}
+.pill.primary{background:var(--amber);border-color:var(--amber);color:var(--on-amber);font-weight:650}
+.box{min-height:60px;display:flex;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid var(--edge)}
+.box .dot{flex:none}
+.setting{min-height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--edge);width:100%;text-align:left}
+/* Sheet */
+.scrim{position:absolute;inset:0;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .2s}
+.sheet{position:absolute;left:0;right:0;bottom:0;max-height:92%;background:var(--panel);border-top:1px solid var(--edge);border-radius:20px 20px 0 0;transform:translateY(100%);transition:transform .25s ease,visibility .25s;display:flex;flex-direction:column;visibility:hidden}
+.open .scrim{opacity:1;pointer-events:auto}
+.sheet.on{transform:none;visibility:visible}
+.grab{width:40px;height:4px;border-radius:2px;background:var(--edge);margin:8px auto 0}
+.sheet-head{display:flex;align-items:center;padding:4px 4px 4px 16px}
+.sheet-head h2{flex:1;font-size:18px}
+.sheet-body{overflow-y:auto;padding:4px 16px 16px}
+.sheet-foot{display:flex;gap:8px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--edge)}
+.sheet-foot .pill{flex:1;justify-content:center}
+.sheet-foot .pill.primary{flex:2}
+.field{display:block;margin:8px 0 16px}
+.field span{display:block;font:12px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+input[type=text],input[type=time]{width:100%;min-height:var(--tap-min);padding:0 14px;border-radius:10px;border:1px solid var(--edge);background:var(--bg);color:var(--ink);font:17px var(--sans)}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;border-radius:var(--radius-pill);background:var(--bg);border:1px solid var(--edge)}
+.seg button{min-height:40px;border-radius:var(--radius-pill);font-size:14px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--ink);font-weight:600}
+.room{display:grid;grid-template-columns:var(--tap-min) 1fr;align-items:center;min-height:56px;border-bottom:1px solid var(--edge)}
+.room input[type=checkbox]{width:24px;height:24px;accent-color:var(--amber);justify-self:center}
+.room .vol{grid-column:2;display:none;align-items:center;gap:8px;padding-bottom:10px}
+.room.sel .vol{display:flex}
+.vol .icon-btn{flex:none;width:44px;height:44px;border:1px solid var(--edge)}
+input[type=range]{flex:1;height:44px;accent-color:var(--amber)}
+.vol output{font:13px var(--mono);color:var(--muted);width:3ch;text-align:right}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.days button{height:44px;border-radius:50%;border:1px solid var(--edge);font:13px var(--mono)}
+.days button[aria-pressed="true"]{background:var(--amber);border-color:var(--amber);color:var(--on-amber);font-weight:700}
+.quick{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.quick .pill{min-height:40px;font-size:14px;padding:0 14px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.danger{color:var(--red);min-height:var(--tap-min);width:100%;margin-top:8px;border:1px solid #4a2219;border-radius:var(--radius-pill)}
+.menu button{width:100%;min-height:56px;text-align:left;padding:0 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--edge)}
+.menu .del{color:var(--red)}
+</style>
+</head>
+<body>
+<div class="phone" id="phone">
+  <header class="bar">
+    <span class="status"><span class="dot"></span>15 speakers</span>
+    <h1 id="title">Scenes</h1>
+    <button class="icon-btn" id="addBtn" aria-label="New scene"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  </header>
+
+  <main>
+    <section class="view on" id="v-szenen" aria-label="Scenes">
+      <div class="list" id="scenes"></div>
+    </section>
+
+    <section class="view" id="v-zeitplaene" aria-label="Schedules">
+      <p class="next">Next start: <b>tomorrow 06:10</b> · Morning Radio</p>
+      <div class="list">
+        <div class="row"><div class="meta" style="padding-left:8px"><div class="time">06:10–08:30</div><div class="sub">Morning Radio · Mon Tue Wed Thu Fri</div></div><button class="switch" role="switch" aria-checked="true" aria-label="Morning Radio enabled"><span></span></button></div>
+        <div class="row"><div class="meta" style="padding-left:8px"><div class="time">08:00–10:00</div><div class="sub">FM4 Weekend · Sat Sun</div></div><button class="switch" role="switch" aria-checked="false" aria-label="FM4 Weekend enabled"><span></span></button></div>
+        <div class="row"><div class="meta" style="padding-left:8px"><div class="time">22:00</div><div class="sub">Sleep · daily · no stop</div></div><button class="switch" role="switch" aria-checked="true" aria-label="Sleep enabled"><span></span></button></div>
+      </div>
+    </section>
+
+    <section class="view" id="v-boxen" aria-label="Speakers">
+      <div style="display:flex;gap:8px;padding:4px 0 8px"><button class="pill primary"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg>Refresh</button></div>
+      <p class="label">Found · 15</p>
+      <div id="boxes"></div>
+      <p class="label">Settings</p>
+      <button class="setting">Save speakers to config <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+      <button class="setting">Change API token <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+      <button class="setting">Appearance <span class="sub">Dark</span></button>
+    </section>
+  </main>
+
+  <div class="np" id="np" role="region" aria-label="Now playing">
+    <div class="meta" id="npMeta"><div class="name"><span class="eq"><i></i><i></i><i></i></span><span id="npName"></span></div><div class="sub" id="npSub">Tap for volume</div></div>
+    <button class="stop" id="npStop" aria-label="Stop"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" fill="currentColor" stroke="none"/></svg></button>
+  </div>
+
+  <nav aria-label="Main navigation">
+    <button data-tab="szenen" aria-current="page"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4z"/></svg>Scenes</button>
+    <button data-tab="zeitplaene"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Schedules</button>
+    <button data-tab="boxen"><svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="2"/><circle cx="12" cy="14" r="3"/><path d="M12 7h.01"/></svg>Speakers</button>
+  </nav>
+
+  <div class="scrim" id="scrim"></div>
+
+  <div class="sheet" id="sh-menu" role="dialog" aria-label="Scene actions">
+    <div class="grab"></div>
+    <div class="sheet-head"><h2 id="menuTitle">Scene</h2><button class="icon-btn close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <div class="menu"><button data-open="sh-edit"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Edit</button><button data-open="sh-vol"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7"/></svg>Volume</button></div>
+    <div style="padding:16px 16px calc(16px + env(safe-area-inset-bottom))"></div>
+  </div>
+
+  <div class="sheet" id="sh-vol" role="dialog" aria-label="Volume">
+    <div class="grab"></div>
+    <div class="sheet-head"><h2>Volume</h2><button class="icon-btn close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <div class="sheet-body" id="volBody"></div>
+  </div>
+
+  <div class="sheet" id="sh-edit" role="dialog" aria-label="Edit scene">
+    <div class="grab"></div>
+    <div class="sheet-head"><h2>Edit scene</h2><button class="icon-btn close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <div class="sheet-body">
+      <label class="field"><span>Name</span><input type="text" value="Morning Radio"></label>
+      <div class="field"><span>Source</span>
+        <div class="seg" role="group" aria-label="Source"><button aria-pressed="true">Search radio</button><button aria-pressed="false">From speaker</button><button aria-pressed="false">URL</button></div>
+        <input type="text" value="Hit Radio" style="margin-top:8px" aria-label="Search stations">
+      </div>
+      <div class="field"><span>Rooms</span><div id="rooms"></div></div>
+      <button class="danger">Delete scene</button>
+    </div>
+    <div class="sheet-foot"><button class="pill close">Cancel</button><button class="pill primary close">Save &amp; play</button></div>
+  </div>
+
+  <div class="sheet" id="sh-sched" role="dialog" aria-label="New schedule">
+    <div class="grab"></div>
+    <div class="sheet-head"><h2>New schedule</h2><button class="icon-btn close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <div class="sheet-body">
+      <label class="field"><span>Scene</span><input type="text" value="Morning Radio"></label>
+      <div class="field"><span>Days</span>
+        <div class="days" id="days"></div>
+        <div class="quick"><button class="pill" data-q="0,1,2,3,4">Mon–Fri</button><button class="pill" data-q="5,6">Weekends</button><button class="pill" data-q="0,1,2,3,4,5,6">Daily</button></div>
+      </div>
+      <div class="two"><label class="field"><span>Start</span><input type="time" value="06:10"></label><label class="field"><span>Stop</span><input type="time" value="08:30"></label></div>
+    </div>
+    <div class="sheet-foot"><button class="pill close">Cancel</button><button class="pill primary close">Save schedule</button></div>
+  </div>
+</div>
+
+<script>
+const ICON_PLAY='<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></svg>';
+const ICON_STOP='<svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" fill="currentColor" stroke="none"/></svg>';
+const scenes=[
+  {id:"morning-radio",name:"Morning Radio",rooms:["Living Room","Kitchen","Bathroom"]},
+  {id:"fm4-living-room",name:"FM4 Living Room",rooms:["Living Room"]},
+  {id:"talk-kitchen",name:"Talk Radio Kitchen",rooms:["Kitchen"]},
+  {id:"party",name:"Party Everywhere",rooms:["Living Room","Kitchen","Bathroom","Patio","Office"]},
+  {id:"sleep",name:"Sleep",rooms:["Bedroom"]},
+  {id:"kids",name:"Kids Radio",rooms:["Kids Room"]},
+];
+const allRooms=["Living Room","Kitchen","Bathroom","Bedroom","Office","Patio","Kids Room","Dressing Room"];
+let playing=null, current=scenes[0];
+const $=s=>document.querySelector(s);
+
+function renderScenes(){
+  $("#scenes").innerHTML=scenes.map(s=>`
+    <div class="row${playing===s.id?" playing":""}">
+      <button class="play" data-play="${s.id}" aria-label="${playing===s.id?"Stop":"Play"}: ${s.name}">${playing===s.id?ICON_STOP:ICON_PLAY}</button>
+      <button class="meta" data-play="${s.id}" style="text-align:left;min-height:var(--tap-primary)">
+        <div class="name">${s.name}</div>
+        <div class="sub">${playing===s.id?'<span class="state">playing · </span>':""}${s.rooms.join(" · ")}</div>
+      </button>
+      <button class="icon-btn" data-menu="${s.id}" aria-label="Actions: ${s.name}"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button>
+    </div>`).join("");
+  const s=scenes.find(x=>x.id===playing);
+  $("#np").classList.toggle("on",!!s);
+  if(s){$("#npName").textContent=s.name;$("#npSub").textContent=s.rooms.join(" · ")+" — Tap for volume"}
+}
+function volRow(r,v){return `<div class="room sel" style="grid-template-columns:1fr"><div style="padding-top:10px">${r}</div><div class="vol" style="grid-column:1"><button class="icon-btn" aria-label="${r} quieter">−</button><input type="range" min="0" max="100" value="${v}" aria-label="Volume ${r}" oninput="this.nextElementSibling.textContent=this.value"><output>${v}</output><button class="icon-btn" aria-label="${r} louder">+</button></div></div>`}
+function renderSheets(){
+  $("#volBody").innerHTML=current.rooms.map((r,i)=>volRow(r,[25,18,12,30,20][i]||20)).join("");
+  $("#rooms").innerHTML=allRooms.map(r=>{const on=current.rooms.includes(r);return `<div class="room${on?" sel":""}"><input type="checkbox" ${on?"checked":""} aria-label="${r}"><label style="min-height:56px;display:flex;align-items:center">${r}</label><div class="vol"><button class="icon-btn" aria-label="${r} quieter">−</button><input type="range" value="20" aria-label="Volume ${r}" oninput="this.nextElementSibling.textContent=this.value"><output>20</output><button class="icon-btn" aria-label="${r} louder">+</button></div></div>`}).join("");
+  $("#menuTitle").textContent=current.name;
+}
+function openSheet(id){closeSheets();renderSheets();$("#phone").classList.add("open");$("#"+id).classList.add("on")}
+function closeSheets(){$("#phone").classList.remove("open");document.querySelectorAll(".sheet").forEach(s=>s.classList.remove("on"))}
+
+const dayNames=["Mo","Tu","We","Th","Fr","Sa","Su"];let days=new Set([0,1,2,3,4]);
+function renderDays(){$("#days").innerHTML=dayNames.map((d,i)=>`<button aria-pressed="${days.has(i)}" data-day="${i}">${d}</button>`).join("")}
+$("#boxes").innerHTML=allRooms.map((r,i)=>`<div class="box"><span class="dot" style="${i===7?"background:var(--red)":""}"></span><div class="meta"><div class="name" style="font-weight:500">${r}</div><div class="sub">${["Era 100","One","Era 100","Five","One SL","Move 2","Roam","Play:1"][i]} · 192.168.1.${10+i}${i===7?" · offline":""}</div></div></div>`).join("");
+
+let tab="szenen";
+function setTab(t){tab=t;document.querySelectorAll(".view").forEach(v=>v.classList.toggle("on",v.id==="v-"+t));
+  document.querySelectorAll("nav button").forEach(b=>b.dataset.tab===t?b.setAttribute("aria-current","page"):b.removeAttribute("aria-current"));
+  $("#title").textContent={szenen:"Scenes",zeitplaene:"Schedules",boxen:"Speakers"}[t];
+  $("#addBtn").style.visibility=t==="boxen"?"hidden":"visible";
+  $("#addBtn").setAttribute("aria-label",t==="zeitplaene"?"New schedule":"New scene");
+  if(location.hash!=="#"+t)history.replaceState(null,"","#"+t)}
+
+document.addEventListener("click",e=>{
+  const b=e.target.closest("button,.scrim,#npMeta");if(!b)return;
+  if(b.dataset.play){playing=playing===b.dataset.play?null:b.dataset.play;renderScenes()}
+  else if(b.dataset.menu){current=scenes.find(s=>s.id===b.dataset.menu);openSheet("sh-menu")}
+  else if(b.dataset.open){openSheet(b.dataset.open)}
+  else if(b.dataset.tab){setTab(b.dataset.tab)}
+  else if(b.dataset.day){const i=+b.dataset.day;days.has(i)?days.delete(i):days.add(i);renderDays()}
+  else if(b.dataset.q){days=new Set(b.dataset.q.split(",").map(Number));renderDays()}
+  else if(b.id==="npStop"){playing=null;renderScenes()}
+  else if(b.id==="npMeta"){current=scenes.find(s=>s.id===playing);openSheet("sh-vol")}
+  else if(b.id==="addBtn"){if(tab==="zeitplaene"){renderDays();openSheet("sh-sched")}else{current={name:"New scene",rooms:[]};openSheet("sh-edit")}}
+  else if(b.classList.contains("close")||b.id==="scrim"){closeSheets()}
+  else if(b.classList.contains("switch")){b.setAttribute("aria-checked",b.getAttribute("aria-checked")!=="true")}
+  else if(b.closest(".seg")){b.parentElement.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b))}
+});
+document.addEventListener("change",e=>{if(e.target.matches(".room input[type=checkbox]"))e.target.closest(".room").classList.toggle("sel",e.target.checked)});
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheets()});
+playing="morning-radio";renderScenes();renderDays();setTab((location.hash||"#szenen").slice(1));
+</script>
+</body>
+</html>

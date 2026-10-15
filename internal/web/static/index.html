@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Hallido — Powered by siraris</title>
+  <meta name="app-version" content="__APP_VERSION__">
+  <!-- Installable web app (ADR 0016); crossorigin: load the manifest with the Cloudflare Access cookie -->
+  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">
+  <meta name="application-name" content="Hallido">
+  <meta name="theme-color" content="#0d0c0a" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4efe3" media="(prefers-color-scheme: light)">
+  <meta name="color-scheme" content="dark light">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Hallido">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <script>
+    (function () {
+      var k = "sonos-theme", s = localStorage.getItem(k);
+      var t = s === "light" || s === "dark" ? s
+        : (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+      document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+    })();
+  </script>
+  <link rel="stylesheet" href="vendor/pico.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="frame">
+    <header class="bar">
+      <div class="status" id="status" role="status" title="Status" data-i18n-title="np.status">
+        <span class="dot" id="statusDot" aria-hidden="true"></span>
+        <span id="statusText" data-i18n="status.connecting">connecting…</span>
+      </div>
+      <h1 class="bar-title" id="viewTitle" data-i18n="tab.scenes">Scenes</h1>
+      <button type="button" class="icon-btn" id="addBtn" aria-label="New scene" data-i18n-aria="scene.new" hidden>
+        <span data-lucide="plus" class="lucide-icon bar-icon"></span>
+      </button>
+    </header>
+
+    <main class="views" id="views">
+      <p class="hint" id="hint" role="status"></p>
+
+      <section class="view" id="view-szenen" data-view="szenen" aria-label="Scenes" data-i18n-aria="tab.scenes">
+        <div class="grid" id="grid" aria-live="polite"></div>
+      </section>
+
+      <section class="view" id="view-zeitplaene" data-view="zeitplaene" aria-label="Schedules" data-i18n-aria="tab.schedules" hidden>
+        <div class="schedules-section" id="schedulesSection">
+          <p class="schedule-summary" id="scheduleSummary" hidden></p>
+          <p class="hint" id="scheduleHint"></p>
+          <ul class="schedule-list" id="scheduleList" aria-live="polite"></ul>
+        </div>
+      </section>
+
+      <section class="view" id="view-boxen" data-view="boxen" aria-label="Speakers" data-i18n-aria="tab.speakers" hidden>
+        <div class="speakers-panel" id="speakersPanel" hidden>
+          <div class="speakers-actions">
+            <button
+              type="button"
+              class="pill primary btn-refresh"
+              id="refreshSpeakersBtn"
+              aria-busy="false"
+              aria-label="Refresh found speakers"
+              data-i18n-aria="speakers.refreshAria"
+            >
+              <span data-lucide="refresh-cw" class="lucide-icon btn-icon"></span>
+              <span class="btn-label" data-i18n="common.refresh">Refresh</span>
+            </button>
+          </div>
+          <section class="discover-panel" id="discoverPanel" hidden aria-live="polite" aria-label="Now Playing" data-i18n-aria="np.title">
+            <header class="discover-head">
+              <h2 class="discover-title" id="discoverTitle" data-i18n="np.title">Now Playing</h2>
+              <button type="button" class="btn-close" id="discoverClose" aria-label="Close Now Playing" data-i18n-aria="np.close" data-i18n="common.close">Close</button>
+            </header>
+            <dl class="discover-meta" id="discoverMeta"></dl>
+            <button type="button" class="pill danger" id="discoverUngroupBtn" hidden>
+              <span data-lucide="unlink" class="lucide-icon btn-icon"></span>
+              <span class="btn-label" data-i18n="group.leave">Leave group</span>
+            </button>
+          </section>
+          <h2 class="section-label"><span data-i18n="speakers.found">Found</span> · <span id="speakerCount">0</span></h2>
+          <div class="group-list" id="groupList" aria-live="polite"></div>
+          <h3 class="section-label singles-label" id="singlesLabel" data-i18n="speakers.standalone" hidden>Standalone</h3>
+          <ul class="speakers-list" id="speakerList"></ul>
+        </div>
+
+        <h2 class="section-label" data-i18n="common.settings">Settings</h2>
+        <div class="settings">
+          <button
+            type="button"
+            class="setting"
+            id="saveSpeakersConfigBtn"
+            aria-busy="false"
+            aria-label="Save found speakers to config.json"
+            data-i18n-aria="speakers.saveConfigAria"
+            hidden
+          >
+            <span data-lucide="save" class="lucide-icon setting-icon"></span>
+            <span class="btn-label" data-i18n="speakers.saveConfig">Save speakers to config</span>
+            <span data-lucide="chevron-right" class="lucide-icon setting-chevron"></span>
+          </button>
+          <button type="button" class="setting" id="tokenBtn">
+            <span data-lucide="pencil" class="lucide-icon setting-icon"></span>
+            <span class="btn-label" data-i18n="token.change">Change API token</span>
+            <span data-lucide="chevron-right" class="lucide-icon setting-chevron"></span>
+          </button>
+          <button
+            type="button"
+            class="setting theme-toggle"
+            id="themeToggle"
+            aria-label="Switch to light theme"
+            data-i18n-aria="theme.toLight"
+            aria-pressed="false"
+          >
+            <span id="themeIcon" class="theme-icon-slot" aria-hidden="true"></span>
+            <span class="btn-label" data-i18n="theme.appearance">Appearance</span>
+            <span class="setting-value" id="themeLabel" data-i18n="theme.dark">Dark</span>
+          </button>
+        </div>
+
+        <footer class="foot">
+          <p class="meta" id="meta"></p>
+          <p class="brand-text">Hallido <em>Powered by siraris</em></p>
+        </footer>
+      </section>
+    </main>
+
+    <div class="now-playing" id="nowPlaying" role="region" aria-label="Now playing" data-i18n-aria="np.region" hidden>
+      <button type="button" class="np-main" id="nowPlayingMain">
+        <span class="np-name">
+          <span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span id="nowPlayingName"></span>
+        </span>
+        <span class="np-sub" id="nowPlayingSub"></span>
+      </button>
+      <button type="button" class="np-pause" id="nowPlayingPause" aria-label="Pause" data-i18n-aria="action.pause">
+        <span data-lucide="pause" class="lucide-icon play-icon"></span>
+      </button>
+      <button type="button" class="np-stop" id="nowPlayingStop" aria-label="Stop" data-i18n-aria="action.stop">
+        <span data-lucide="square" class="lucide-icon play-icon"></span>
+      </button>
+    </div>
+
+    <nav class="tabbar" aria-label="Main navigation" data-i18n-aria="nav.main">
+      <a class="tab" href="#szenen" data-tab="szenen" aria-current="page">
+        <span data-lucide="circle-play" class="lucide-icon tab-icon"></span>
+        <span class="tab-label" data-i18n="tab.scenes">Scenes</span>
+      </a>
+      <a class="tab" href="#zeitplaene" data-tab="zeitplaene">
+        <span data-lucide="clock" class="lucide-icon tab-icon"></span>
+        <span class="tab-label" data-i18n="tab.schedules">Schedules</span>
+      </a>
+      <a class="tab" href="#boxen" data-tab="boxen">
+        <span data-lucide="speaker" class="lucide-icon tab-icon"></span>
+        <span class="tab-label" data-i18n="tab.speakers">Speakers</span>
+      </a>
+    </nav>
+  </div>
+
+  <dialog id="sceneDialog" class="sheet sheet-full editor-sheet" aria-labelledby="sceneDialogTitle">
+    <form method="dialog" id="sceneForm" class="sheet-form">
+      <div class="sheet-grab" aria-hidden="true"></div>
+      <header class="sheet-head">
+        <h2 id="sceneDialogTitle" data-i18n="scene.new">New scene</h2>
+        <button type="button" class="icon-btn" data-close-dialog aria-label="Close" data-i18n-aria="common.close">
+          <span data-lucide="x" class="lucide-icon bar-icon"></span>
+        </button>
+      </header>
+
+      <div class="sheet-body editor-body">
+        <div class="field">
+          <label class="field-label" for="sceneName" data-i18n="scene.name">Name</label>
+          <input type="text" id="sceneName" required autocomplete="off" maxlength="80" placeholder="e.g. FM4 Living Room" data-i18n-placeholder="scene.namePlaceholder">
+        </div>
+
+        <fieldset class="field source-fieldset">
+          <legend class="field-label" data-i18n="scene.source">Source</legend>
+          <div class="seg" role="radiogroup" aria-label="Source type" data-i18n-aria="scene.sourceType">
+            <label class="seg-opt"><input type="radio" name="sourceMode" value="radio" checked><span data-i18n="source.radio">Search radio</span></label>
+            <label class="seg-opt"><input type="radio" name="sourceMode" value="box"><span data-i18n="source.box">From speaker</span></label>
+            <label class="seg-opt"><input type="radio" name="sourceMode" value="url"><span data-i18n="source.url">URL</span></label>
+            <input type="radio" name="sourceMode" value="favorite" class="visually-hidden" tabindex="-1" aria-hidden="true">
+          </div>
+          <button type="button" class="link-btn" id="sourceFavoriteBtn" aria-pressed="false">
+            <span data-lucide="ellipsis" class="lucide-icon btn-icon"></span>
+            <span data-i18n="source.favorites">From Sonos favorites</span>
+          </button>
+
+          <div class="source-panel" data-source-panel="radio">
+            <div class="radio-search-row">
+              <input type="search" id="radioSearchInput" class="scene-url" autocomplete="off" maxlength="120" placeholder="Search stations, e.g. FM4" aria-label="Search radio" data-i18n-placeholder="radio.placeholder" data-i18n-aria="source.radio">
+              <button type="button" class="icon-btn radio-search-btn" id="radioSearchBtn" aria-label="Search" data-i18n-aria="common.search">
+                <span data-lucide="search" class="lucide-icon bar-icon"></span>
+              </button>
+            </div>
+            <p class="field-hint picked" id="radioPicked" hidden></p>
+            <ul id="radioSearchResults" class="radio-search-results" hidden aria-live="polite"></ul>
+            <p class="field-hint" id="radioSearchHint"></p>
+          </div>
+          <div class="source-panel" data-source-panel="box" hidden>
+            <select id="sourceBoxSelect" class="scene-select" disabled aria-label="Speaker with a playing stream" data-i18n-aria="source.boxSelect"></select>
+            <p class="field-hint" id="sourceBoxPreview"></p>
+          </div>
+          <div class="source-panel" data-source-panel="url" hidden>
+            <input type="url" id="sourceUrl" class="scene-url" placeholder="https://…" aria-label="Stream URL" data-i18n-aria="source.streamUrl" disabled>
+            <p class="field-hint" id="sourceUrlHint" hidden></p>
+          </div>
+          <div class="source-panel" data-source-panel="favorite" hidden>
+            <select id="sourceFavoriteSpeakerSelect" class="scene-select" disabled aria-label="Speaker to browse favorites" data-i18n-aria="fav.speakerSelect"></select>
+            <select id="sourceFavoriteSelect" class="scene-select" disabled aria-label="Sonos favorite" data-i18n-aria="fav.select"></select>
+            <p class="field-hint" id="sourceFavoritePreview"></p>
+          </div>
+        </fieldset>
+
+        <fieldset class="field members-fieldset">
+          <legend class="field-label" id="sceneMembersLabel" data-i18n="scene.membersLabel">Rooms &amp; volume</legend>
+          <div id="sceneMembers" class="scene-members"></div>
+        </fieldset>
+
+        <details class="advanced">
+          <summary data-i18n="scene.advanced">Advanced</summary>
+          <div class="field">
+            <label class="field-label" for="sceneId" data-i18n="scene.idLabel">ID (slug)</label>
+            <input type="text" id="sceneId" required autocomplete="off" maxlength="64" pattern="[a-z0-9][a-z0-9-]*" spellcheck="false">
+            <p class="field-hint" data-i18n="scene.idHint">Generated from the name; fixed when editing.</p>
+          </div>
+        </details>
+
+        <p class="field-hint scene-save-hint" id="sceneSaveHint" hidden></p>
+
+        <button type="button" class="pill danger" id="sceneDeleteBtn" hidden>
+          <span data-lucide="trash-2" class="lucide-icon btn-icon"></span>
+          <span data-i18n="scene.delete">Delete scene</span>
+        </button>
+      </div>
+
+      <footer class="sheet-foot">
+        <button type="button" class="ghost" id="sceneCancelBtn" data-i18n="common.cancel">Cancel</button>
+        <button value="save" type="submit" class="primary" id="sceneSaveBtn" data-i18n="scene.saveAndPlay">Save &amp; play</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="sceneMenuSheet" class="sheet" aria-labelledby="sceneMenuTitle">
+    <div class="sheet-grab" aria-hidden="true"></div>
+    <header class="sheet-head">
+      <h2 id="sceneMenuTitle" data-i18n="scene.label">Scene</h2>
+      <button type="button" class="icon-btn" data-close-dialog aria-label="Close" data-i18n-aria="common.close">
+        <span data-lucide="x" class="lucide-icon bar-icon"></span>
+      </button>
+    </header>
+    <div class="sheet-body sheet-menu-body">
+      <div class="sheet-menu">
+        <button type="button" id="sceneMenuPause" hidden>
+          <span data-lucide="pause" class="lucide-icon setting-icon"></span>
+          <span class="btn-label" data-i18n="action.pause">Pause</span>
+        </button>
+        <button type="button" id="sceneMenuEdit">
+          <span data-lucide="pencil" class="lucide-icon setting-icon"></span>
+          <span data-i18n="common.edit">Edit</span>
+        </button>
+      </div>
+      <h3 class="section-label" data-i18n="common.volume">Volume</h3>
+      <div class="vol-list" id="sceneMenuVolumes"></div>
+      <p class="field-hint" id="sceneMenuHint"></p>
+    </div>
+  </dialog>
+
+  <dialog id="sceneDeleteDialog" aria-labelledby="sceneDeleteTitle" aria-describedby="sceneDeleteMessage">
+    <form method="dialog" id="sceneDeleteForm">
+      <header>
+        <h2 id="sceneDeleteTitle" data-i18n="scene.delete">Delete scene</h2>
+      </header>
+      <p id="sceneDeleteMessage"></p>
+      <footer class="dialog-actions">
+        <button type="submit" class="ghost" value="cancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="btn-danger" value="delete" data-i18n="common.delete">Delete</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="ungroupDialog" aria-labelledby="ungroupTitle" aria-describedby="ungroupMessage">
+    <form method="dialog" id="ungroupForm">
+      <header>
+        <h2 id="ungroupTitle" data-i18n="group.leave">Leave group</h2>
+      </header>
+      <p id="ungroupMessage"></p>
+      <footer class="dialog-actions">
+        <button type="submit" class="ghost" value="cancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="btn-danger" value="ungroup" id="ungroupConfirmBtn" data-i18n="group.btnUngroup">Ungroup</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="scheduleDialog" class="sheet sheet-full editor-sheet" aria-labelledby="scheduleDialogTitle">
+    <form method="dialog" id="scheduleForm" class="sheet-form">
+      <div class="sheet-grab" aria-hidden="true"></div>
+      <header class="sheet-head">
+        <h2 id="scheduleDialogTitle" data-i18n="schedule.new">New schedule</h2>
+        <button type="button" class="icon-btn" data-close-dialog aria-label="Close" data-i18n-aria="common.close">
+          <span data-lucide="x" class="lucide-icon bar-icon"></span>
+        </button>
+      </header>
+
+      <div class="sheet-body editor-body">
+        <div class="field">
+          <label class="field-label" for="scheduleScene" data-i18n="scene.label">Scene</label>
+          <select id="scheduleScene" class="scene-select" required></select>
+        </div>
+
+        <fieldset class="field days-fieldset">
+          <legend class="field-label" data-i18n="schedule.days">Days</legend>
+          <div class="day-chips" id="scheduleDays" role="group" aria-label="Days of the week" data-i18n-aria="schedule.daysAria">
+            <label class="day-chip"><input type="checkbox" name="scheduleDay" value="mon" aria-label="Monday" data-i18n-aria="day.mon.long"><span data-i18n="day.mon">Mo</span></label>
+            <label class="day-chip"><input type="checkbox" name="scheduleDay" value="tue" aria-label="Tuesday" data-i18n-aria="day.tue.long"><span data-i18n="day.tue">Tu</span></label>
+            <label class="day-chip"><input type="checkbox" name="scheduleDay" value="wed" aria-label="Wednesday" data-i18n-aria="day.wed.long"><span data-i18n="day.wed">We</span></label>
+            <label class="day-chip"><input type="checkbox" name="scheduleDay" value="thu" aria-label="Thursday" data-i18n-aria="day.thu.long"><span data-i18n="day.thu">Th</span></label>
+            <label class="day-chip"><input type="checkbox" name="scheduleDay" value="fri" aria-label="Friday" data-i18n-aria="day.fri.long"><span data-i18n="day.fri">Fr</span></label>
+            <label class="day-chip"><input type="checkbox" name="scheduleDay" value="sat" aria-label="Saturday" data-i18n-aria="day.sat.long"><span data-i18n="day.sat">Sa</span></label>
+            <label class="day-chip"><input type="checkbox" name="scheduleDay" value="sun" aria-label="Sunday" data-i18n-aria="day.sun.long"><span data-i18n="day.sun">Su</span></label>
+          </div>
+          <div class="day-presets">
+            <button type="button" class="pill day-preset" data-days="mon,tue,wed,thu,fri" data-i18n="schedule.presetWeekdays">Mon–Fri</button>
+            <button type="button" class="pill day-preset" data-days="sat,sun" data-i18n="schedule.presetWeekends">Weekends</button>
+            <button type="button" class="pill day-preset" data-days="mon,tue,wed,thu,fri,sat,sun" data-i18n="schedule.presetDaily">Daily</button>
+          </div>
+        </fieldset>
+
+        <div class="field time-grid">
+          <div>
+            <label class="field-label" for="scheduleStart" data-i18n="schedule.start">Start</label>
+            <input type="time" id="scheduleStart" required step="60">
+          </div>
+          <div>
+            <label class="field-label" for="scheduleStop" data-i18n="schedule.stop">Stop (optional)</label>
+            <input type="time" id="scheduleStop" step="60">
+          </div>
+        </div>
+        <p class="field-hint"><span data-i18n="schedule.tz">Time zone</span> <span id="scheduleTz">Europe/Vienna</span>. <span data-i18n="schedule.tzHint">Without a stop time the scene keeps playing; it is only stopped if the scene itself is still playing.</span></p>
+
+        <label class="switch-row">
+          <span data-i18n="schedule.enabled">Enabled</span>
+          <input type="checkbox" role="switch" id="scheduleEnabled" checked>
+        </label>
+
+        <p class="field-hint scene-save-hint" id="scheduleSaveHint" hidden></p>
+
+        <button type="button" class="pill danger" id="scheduleDeleteBtn" hidden>
+          <span data-lucide="trash-2" class="lucide-icon btn-icon"></span>
+          <span data-i18n="schedule.delete">Delete schedule</span>
+        </button>
+      </div>
+
+      <footer class="sheet-foot">
+        <button type="button" class="ghost" id="scheduleCancelBtn" data-i18n="common.cancel">Cancel</button>
+        <button value="save" type="submit" class="primary" id="scheduleSaveBtn" data-i18n="schedule.save">Save schedule</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="scheduleDeleteDialog" aria-labelledby="scheduleDeleteTitle" aria-describedby="scheduleDeleteMessage">
+    <form method="dialog" id="scheduleDeleteForm">
+      <header>
+        <h2 id="scheduleDeleteTitle" data-i18n="schedule.delete">Delete schedule</h2>
+      </header>
+      <p id="scheduleDeleteMessage"></p>
+      <footer class="dialog-actions">
+        <button type="submit" class="ghost" value="cancel" data-i18n="common.cancel">Cancel</button>
+        <button type="submit" class="btn-danger" value="delete" data-i18n="common.delete">Delete</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <dialog id="tokenDialog" aria-labelledby="tokenDialogTitle">
+    <form method="dialog" id="tokenForm">
+      <header>
+        <h2 id="tokenDialogTitle" data-i18n="token.title">API token</h2>
+        <p data-i18n="token.info">Stored locally in the browser and sent as a bearer token.</p>
+      </header>
+      <input type="password" id="tokenInput" placeholder="Token" data-i18n-placeholder="token.placeholder" autocomplete="off" spellcheck="false" aria-label="API token" data-i18n-aria="token.title">
+      <footer class="dialog-actions">
+        <button value="cancel" type="submit" class="ghost" data-i18n="common.cancel">Cancel</button>
+        <button value="save" type="submit" class="primary" id="tokenSave" data-i18n="common.save">Save</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <script src="icons.js"></script>
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+  <script src="pwa.js"></script>
+</body>
+</html>

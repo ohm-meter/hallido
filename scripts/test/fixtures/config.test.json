@@ -1,0 +1,18 @@
+{
+  "listen": ":18080",
+  "api_token": "integration-test-token",
+  "speakers": {
+    "Wohnzimmer": { "ip": "192.168.1.10" },
+    "Kueche": { "ip": "192.168.1.11" }
+  },
+  "scenes": [
+    {
+      "id": "fm4-wohnzimmer",
+      "name": "FM4 – Wohnzimmer",
+      "source": { "type": "stream", "uri": "https://orf-live.ors-shoutcast.at/fm4-q2a" },
+      "members": [
+        { "speaker": "Wohnzimmer", "volume": 28 }
+      ]
+    }
+  ]
+}

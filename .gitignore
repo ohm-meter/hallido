@@ -1,0 +1,17 @@
+/build/
+/dist/
+/.run/
+/config.json
+.env
+*.log
+.DS_Store
+/node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/config.json.bak
+
+# Lokale Spiegel von Agent-Tools (Quelle: .cursor/skills, .cursor/mcp.json)
+/.agents/
+/.codex/

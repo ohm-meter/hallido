@@ -1,0 +1,29 @@
+{
+  "listen": ":18081",
+  "api_token": "integration-test-token",
+  "speakers": {
+    "Wohnzimmer": { "ip": "192.168.1.10" },
+    "Kueche": { "ip": "192.168.1.11" },
+    "Bad": { "ip": "192.168.1.12" },
+    "Schlafzimmer": { "ip": "192.168.1.13" },
+    "Buero": { "ip": "192.168.1.14" },
+    "Terrasse": { "ip": "192.168.1.15" },
+    "Garage": { "ip": "192.168.1.16" },
+    "Keller": { "ip": "192.168.1.17" },
+    "Gaeste": { "ip": "192.168.1.18" },
+    "Flur": { "ip": "192.168.1.19" },
+    "Kinderzimmer": { "ip": "192.168.1.20" },
+    "Esszimmer": { "ip": "192.168.1.21" },
+    "Ankleide": { "ip": "192.168.1.22" },
+    "Wintergarten": { "ip": "192.168.1.23" },
+    "Dachboden": { "ip": "192.168.1.24" }
+  },
+  "scenes": [
+    {
+      "id": "test-layout",
+      "name": "Layout-Test",
+      "source": { "type": "stream", "uri": "https://example.com/stream.mp3" },
+      "members": [{ "speaker": "Wohnzimmer", "volume": 20 }]
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+[Unit]
+Description=Hallido
+Documentation=https://github.com/ohm-meter/hallido
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+StateDirectory=sonos-agent
+StateDirectoryMode=0750
+Type=simple
+User=sonos
+Group=sonos
+# Code (owned by root, read-only): /usr/local/sonos-agent
+# Data (config.json, .bak): /var/lib/sonos-agent — the only writable path (ADR 0017)
+WorkingDirectory=/var/lib/sonos-agent
+ExecStart=/usr/local/sonos-agent/bin/sonos-radio-agent -config /var/lib/sonos-agent/config.json
+Restart=on-failure
+RestartSec=3
+# Preferably set the token here instead of in config.json:
+# Environment=SRA_API_TOKEN=your-token
+# Control real speakers (mock for testing only: SRA_DRIVER=mock):
+Environment=SRA_DRIVER=sonos
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+UMask=0077
+# Note: ports < 1024 (listen ':80') require CapabilityBoundingSet=CAP_NET_BIND_SERVICE.
+
+[Install]
+WantedBy=multi-user.target

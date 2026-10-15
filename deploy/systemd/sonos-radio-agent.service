@@ -1,0 +1,40 @@
+# DEPRECATED: only for existing installations under /opt. New: sonos-agent.service (scripts/install.sh).
+[Unit]
+Description=Sonos Radio Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sonos
+Group=sonos
+WorkingDirectory=/opt/sonos-radio-agent
+ExecStart=/opt/sonos-radio-agent/sonos-radio-agent -config /opt/sonos-radio-agent/config.json
+Restart=on-failure
+RestartSec=3
+# Preferably set the token here instead of in the config file:
+# Environment=SRA_API_TOKEN=your-token
+# Control real speakers, SSDP needs the LAN (mock for testing only: SRA_DRIVER=mock):
+Environment=SRA_DRIVER=sonos
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+UMask=0077
+# Note: ports < 1024 (listen ':80') require CapabilityBoundingSet=CAP_NET_BIND_SERVICE.
+ReadWritePaths=/opt/sonos-radio-agent
+
+[Install]
+WantedBy=multi-user.target

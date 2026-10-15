@@ -1,0 +1,11 @@
+{
+  "name": "hallido-gui-tests",
+  "private": true,
+  "description": "Browser-Layout-Tests fuer die Web-GUI (nur Dev/CI, nicht Runtime)",
+  "scripts": {
+    "test:gui-layout": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0"
+  }
+}

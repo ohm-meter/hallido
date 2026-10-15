@@ -1,0 +1,64 @@
+{
+  "listen": ":8080",
+  "api_token": "BITTE-AENDERN",
+
+  "speakers": {
+    "Living Room": { "ip": "192.168.1.10" },
+    "Kitchen": { "ip": "" },
+    "Bathroom": { "ip": "" }
+  },
+
+  "timezone": "Europe/Vienna",
+
+  "scenes": [
+    {
+      "id": "fm4-living-room",
+      "name": "FM4 – Living Room",
+      "source": { "type": "stream", "uri": "https://orf-live.ors-shoutcast.at/fm4-q2a" },
+      "members": [
+        { "speaker": "Living Room", "volume": 28 }
+      ]
+    },
+    {
+      "id": "fm4-multi-room",
+      "name": "FM4 – Multi-room",
+      "source": { "type": "stream", "uri": "https://orf-live.ors-shoutcast.at/fm4-q2a" },
+      "members": [
+        { "speaker": "Living Room", "volume": 30 },
+        { "speaker": "Kitchen", "volume": 25 }
+      ]
+    },
+    {
+      "id": "morning-radio",
+      "name": "Morning radio – Kitchen & Bathroom",
+      "source": { "type": "stream", "uri": "https://orf-live.ors-shoutcast.at/oe3-q2a" },
+      "members": [
+        { "speaker": "Kitchen", "volume": 22 },
+        { "speaker": "Bathroom", "volume": 18 },
+        { "speaker": "Living Room", "volume": 15 }
+      ]
+    },
+    {
+      "id": "mallorca-sunshine",
+      "name": "Mallorca Sunshine Radio",
+      "source": {
+        "type": "stream",
+        "uri": "https://inselradiomallorca.stream06.radiohost.de/mallorcasunshineradio-live_aac-128"
+      },
+      "members": [
+        { "speaker": "Living Room", "volume": 25 }
+      ]
+    }
+  ],
+
+  "schedules": [
+    {
+      "id": "wake-up-weekdays",
+      "scene": "morning-radio",
+      "days": ["mon", "tue", "wed", "thu", "fri"],
+      "start": "06:10",
+      "stop": "08:30",
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+services:
+  sonos-radio-agent:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      # Token from the environment or .env (no fixed value in the repo):
+      #   SRA_API_TOKEN=$(openssl rand -hex 24) docker compose -f deploy/docker-compose.yml up
+      - SRA_API_TOKEN=${SRA_API_TOKEN:?set SRA_API_TOKEN, e.g. openssl rand -hex 24}
+      - SRA_DRIVER=mock
+    volumes:
+      # The config directory must be writable (GUI scene editor, speaker sync).
+      - sonos-data:/data
+    # Real Sonos speakers need host networking for SSDP
+    # (then remove "ports:" and set SRA_DRIVER=sonos):
+    # network_mode: host
+
+volumes:
+  sonos-data:

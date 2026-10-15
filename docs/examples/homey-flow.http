@@ -1,0 +1,25 @@
+# Sonos Radio Agent — example requests for Homey / REST client
+# Replace the placeholders: {{host}}, {{token}}, {{scene_id}}
+
+@host = http://192.168.1.50:8080
+@token = your-api-token-here
+@scene_id = fm4-living-room
+
+### Health (no token)
+GET {{host}}/api/v1/health
+
+### List scenes
+GET {{host}}/api/v1/scenes
+Authorization: Bearer {{token}}
+
+### Start a scene
+POST {{host}}/api/v1/scenes/{{scene_id}}/play
+Authorization: Bearer {{token}}
+
+### Speakers on the LAN
+GET {{host}}/api/v1/speakers
+Authorization: Bearer {{token}}
+
+### Playback status of all scenes
+GET {{host}}/api/v1/scenes/status
+Authorization: Bearer {{token}}

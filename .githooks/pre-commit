@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Prevents commits with failing tests. Enable with:
+#   git config core.hooksPath .githooks
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "pre-commit: make test"
+make test
+
+STAGED="$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || true)"
+if printf '%s\n' "$STAGED" | grep -qE '^internal/web/static/'; then
+  echo "pre-commit: internal/web/static/* staged — make test-gui (required)"
+  make test-gui
+fi
