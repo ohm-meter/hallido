@@ -132,3 +132,31 @@ test("Touch-Ziele: Boxen-Tab nach Gruppen (Kopf mit Pause/Stop) und Box-Detail",
   await expect(page.locator("#ungroupDialog")).toBeVisible();
   await expectTouchFriendly(page, "Aus Gruppe lösen bestätigen");
 });
+
+test("Touch-Ziele: Protokoll-Sheet (Boxen → Protokoll)", async ({ page }) => {
+  await gotoAppReady(page);
+  await page.route(/\/api\/v1\/logs/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ file: true, entries: [{ time: "2026-10-15T08:00:00Z", level: "INFO", msg: "agent started", attrs: { listen: ":8790" } }] }),
+    }),
+  );
+  await gotoTab(page, "boxen");
+  await page.locator("#logBtn").click();
+  await expect(page.locator("#logSheet .log-entry")).toHaveCount(1);
+  await expectTouchFriendly(page, "Protokoll-Sheet");
+});
+
+test("Touch-Ziele: Einrichtungsassistent (Willkommen)", async ({ page }) => {
+  await page.route(/\/api\/v1\/setup$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ setup_required: true, open: true, expires_in_seconds: 3500 }),
+    }),
+  );
+  await page.goto("/");
+  await expect(page.locator("#setupCreateBtn")).toBeVisible();
+  await expectTouchFriendly(page, "Einrichtung");
+});

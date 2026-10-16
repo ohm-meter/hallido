@@ -1,0 +1,40 @@
+# Hallido __VERSION__ – project file for Synology Container Manager and
+# QNAP Container Station. You do not need to change anything in this file.
+#
+# Guide: https://github.com/ohm-meter/hallido/blob/master/docs/nas/en/README.md
+# What Hallido does on your NAS: docs/explanation/what-hallido-does.md
+#
+# Security (ADR 0021): the image is pinned by its digest (exactly the signed
+# release build), runs as a normal user without any special rights, cannot
+# change its own files and may only write to its data volume.
+services:
+  hallido:
+    # Pinned image: ghcr.io/ohm-meter/hallido __VERSION__ (check: docs/how-to/verify-image.md)
+    image: __IMAGE__
+    container_name: hallido
+    restart: unless-stopped
+    # Sonos speakers are found by multicast (SSDP) – this needs the NAS network.
+    # Hallido is then reachable at http://<address-of-your-NAS>:8790
+    network_mode: host
+    user: "65532:65532"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    pids_limit: 64
+    cpu_shares: 512
+    environment:
+      # Web address port. Change only if 8790 is already used on your NAS.
+      SRA_LISTEN: ":${HALLIDO_PORT:-8790}"
+      # Station search in the scene editor (radio-browser.info). 0 = off:
+      # Hallido then connects to nothing outside your home network.
+      SRA_RADIO_SEARCH: "${HALLIDO_RADIO_SEARCH:-1}"
+    volumes:
+      # Settings, access key (config.json) and the log (logs/) stay here,
+      # also across updates.
+      - hallido-data:/data
+
+volumes:
+  hallido-data:

@@ -27,14 +27,14 @@ func securityHeaders(next http.Handler) http.Handler {
 }
 
 // requireToken prueft das Bearer-Token in konstanter Zeit (gegen Timing-Angriffe).
+// The token can be set later (first-run setup), so it is read per request.
 func (s *Server) requireToken(next http.HandlerFunc) http.HandlerFunc {
-	// Hash-Vergleich: konstante Zeit auch bezueglich der Token-Laenge.
-	want := sha256.Sum256([]byte(s.token))
-	tokenSet := s.token != ""
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Hash-Vergleich: konstante Zeit auch bezueglich der Token-Laenge.
+		want := s.tokenHash.Load()
 		got := sha256.Sum256([]byte(bearer(r)))
-		// Leeres Server-Token akzeptiert nie (fail closed).
-		if !tokenSet || subtle.ConstantTimeCompare(got[:], want[:]) != 1 {
+		// Kein Server-Token (Setup noch offen) akzeptiert nie (fail closed).
+		if want == nil || subtle.ConstantTimeCompare(got[:], want[:]) != 1 {
 			writeError(w, s.log, apperr.New(apperr.CodeUnauthorized,
 				"Invalid or missing API token").
 				WithHint("Set the header 'Authorization: Bearer <token>'."))
@@ -42,6 +42,16 @@ func (s *Server) requireToken(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
+}
+
+// setToken sets the API token (start or first-run setup); empty = none.
+func (s *Server) setToken(token string) {
+	if token == "" {
+		s.tokenHash.Store(nil)
+		return
+	}
+	h := sha256.Sum256([]byte(token))
+	s.tokenHash.Store(&h)
 }
 
 func bearer(r *http.Request) string {

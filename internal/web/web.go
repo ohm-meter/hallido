@@ -19,13 +19,13 @@ import (
 // Nur Laufzeit-Assets einbetten: vendor/pico.css (unminifiziert) und
 // vendor/lucide/*.svg sind Referenz und blaehen das Binary nur auf.
 //
-//go:embed static/index.html static/app.js static/i18n.js static/icons.js static/pwa.js static/style.css static/vendor/pico.min.css
+//go:embed static/index.html static/app.js static/setup.js static/i18n.js static/icons.js static/pwa.js static/style.css static/vendor/pico.min.css
 //go:embed static/manifest.webmanifest static/sw.js static/icons
 //go:embed static/locales/*.json
 var staticFS embed.FS
 
 // versionedAssets werden in index.html mit ?v=<Inhalts-Hash> referenziert.
-var versionedAssets = []string{"vendor/pico.min.css", "style.css", "icons.js", "i18n.js", "app.js", "pwa.js"}
+var versionedAssets = []string{"vendor/pico.min.css", "style.css", "icons.js", "i18n.js", "setup.js", "app.js", "pwa.js"}
 
 // shellFiles haelt der Service Worker zusaetzlich zur Seite offline vor
 // (unversioniert, daher "Netzwerk zuerst").

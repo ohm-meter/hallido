@@ -25,6 +25,9 @@ const (
 	CodeBadRequest         = "bad_request"
 	CodeNotFound           = "not_found"
 	CodeRateLimited        = "rate_limited"
+	CodeForbidden          = "forbidden"      // first-run setup: request not from the home network
+	CodeSetupClosed        = "setup_closed"   // first-run setup: time window expired
+	CodeAlreadySetUp       = "already_set_up" // first-run setup: token already exists
 	CodeInternal           = "internal"
 )
 
@@ -75,6 +78,10 @@ func (e *Error) HTTPStatus() int {
 		return http.StatusNotFound
 	case CodeRateLimited:
 		return http.StatusTooManyRequests
+	case CodeForbidden, CodeSetupClosed:
+		return http.StatusForbidden
+	case CodeAlreadySetUp:
+		return http.StatusConflict
 	case CodeSpeakerUnreachable, CodeGroupingFailed, CodePlaybackFailed, CodeRadioSearchFailed:
 		// Geraet/Upstream nicht erreichbar -> 502, der Agent selbst ist ok.
 		return http.StatusBadGateway

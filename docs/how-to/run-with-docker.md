@@ -1,89 +1,88 @@
-# How-to: Deploy with Docker
+# How-to: Run with Docker
 
-Problem: Run the agent in Docker — with the real Sonos driver and SSDP on the LAN.
+Problem: run Hallido in Docker — on a NAS, a Linux server or for testing.
 
-## When Docker makes sense
+**On a Synology or QNAP NAS** use the step-by-step guide instead:
+[Install on a NAS](../nas/README.md). This page is for people who use
+Docker or Docker Compose directly.
 
-- Test/staging environment on a Linux host on the same LAN
-- You do not want systemd on the host
+## The image
 
-**Recommendation for continuous operation on a Pi:** systemd via [`install-raspberry-pi.md`](install-raspberry-pi.md) — fewer SSDP pitfalls.
+`ghcr.io/ohm-meter/hallido` — built and signed by the release workflow for
+`linux/amd64`, `linux/arm64` and `linux/arm/v7`
+([ADR 0021](../adr/0021-container-image-supply-chain.md)). Distroless, no
+shell, user `65532`, health check built in. Verify it before use:
+[Verify the image](verify-image.md). Everything it does:
+[What Hallido does](../explanation/what-hallido-does.md).
 
-## Prerequisites
+Prefer the digest over a tag. Each release has `IMAGE_DIGEST.txt` and a
+ready `compose.yaml` pinned to that digest.
 
-- Docker and Docker Compose on a host **on the same LAN** as the Sonos speakers
-- Your own `config.json` (token, scenes, optionally `speakers`)
+## Host networking is required for real speakers
 
-## Important: host networking for SSDP
+Speakers are found by SSDP multicast, which the default bridge network
+blocks. Use `network_mode: host`; `ports:` then does not apply and Hallido
+listens directly on the host's port **8790** (`SRA_LISTEN`).
 
-The default bridge network blocks SSDP multicast. For real Sonos operation, use **`network_mode: host`**.
+## Compose
 
-Example change in `deploy/docker-compose.yml`:
-
-```yaml
-services:
-  sonos-radio-agent:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    network_mode: host
-    environment:
-      - SRA_API_TOKEN=your-long-random-token
-      - SRA_DRIVER=sonos
-    volumes:
-      - /path/to/sonos-data:/data   # contains config.json, must be writable for UID 65532
-```
-
-Notes:
-
-- With `network_mode: host`, `ports:` no longer applies — the agent listens directly on the host's `:8080`
-- Mount the config **directory** as a volume (not read-only, not a single file): the API writes the config atomically via a temp file + rename in the same directory. Host directory: `sudo chown 65532:65532 /path/to/sonos-data`. Pass secrets only via `SRA_API_TOKEN`, never in the image
-
-## Start
-
-In the repo (the Compose file requires `SRA_API_TOKEN` from the environment or from a `.env` file next to where you run it):
+The release file `compose.yaml` (template:
+[`deploy/nas/compose.template.yaml`](../../deploy/nas/compose.template.yaml))
+works with plain Docker Compose as well:
 
 ```bash
-export SRA_API_TOKEN="$(openssl rand -hex 24)"   # generate once and keep it safe
-docker compose -f deploy/docker-compose.yml up -d --build
+docker compose -f compose.yaml up -d
 ```
 
-Logs:
+Then open `http://<host>:8790` from a device in your home network: the setup
+wizard creates the access key ([ADR 0022](../adr/0022-first-run-setup.md)).
+Alternatively set a token yourself with `SRA_API_TOKEN` (setup is then
+skipped).
+
+Hardening used there (keep it when you write your own file): `user:
+"65532:65532"`, `read_only: true`, `cap_drop: [ALL]`,
+`security_opt: [no-new-privileges:true]`, `mem_limit`, `pids_limit`, one
+named volume for `/data`.
+
+**Data:** `/data` must be writable for UID 65532. A named volume handles this
+automatically. A host directory needs `sudo chown 65532:65532 /path/to/dir`.
+
+## Environment variables
+
+| Variable | Image default | Meaning |
+|---|---|---|
+| `SRA_DRIVER` | `sonos` | `mock` for tests without speakers |
+| `SRA_LISTEN` | `:8790` | Listen address |
+| `SRA_SETUP` | `1` | First-run setup in the web app while no token exists |
+| `SRA_SETUP_WINDOW` | `1h` | Setup window after the start |
+| `SRA_LOG_DIR` | `/data/logs` | Rotated log, also shown in the web app (Speakers → Log) |
+| `SRA_RADIO_SEARCH` | on | `0` = no connection to the Radio Browser directory |
+| `SRA_API_TOKEN` | — | Fixed token instead of the setup wizard |
+
+## Local test with the mock driver
 
 ```bash
-docker compose -f deploy/docker-compose.yml logs -f
+docker compose -f deploy/docker-compose.yml up --build
 ```
 
-Health:
+Builds the image from the repository and starts it with the mock driver on
+`http://localhost:8790`. Smoke test of an image with the full hardening:
+`make image && scripts/test/container-smoke.sh hallido:dev`.
+
+## Logs and health
 
 ```bash
-curl http://localhost:8080/api/v1/health
+docker logs -f hallido
+docker inspect -f '{{.State.Health.Status}}' hallido
 ```
-
-## Mock vs. Sonos
-
-The bundled Compose file uses `SRA_DRIVER=mock` by default — only for tests without hardware. For production, set `SRA_DRIVER=sonos` and host networking.
 
 ## Firewall
 
-On the Docker host: allow port 8080/tcp on the LAN. No port forwarding to the internet — the API is meant for the local network only.
-
-## Rollback
-
-```bash
-docker compose -f deploy/docker-compose.yml down
-# Restore the previous image/config, then run up again
-```
-
-## Go-live checklist
-
-Same items as the [Pi go-live](install-raspberry-pi.md#go-live-checklist), plus:
-
-- [ ] `network_mode: host` is active (Sonos driver)
-- [ ] `/data` is a writable volume containing `config.json`, not in the image
-- [ ] `SRA_API_TOKEN` is set
+Allow TCP 8790 from your LAN and the speakers' SSDP answers (UDP from the
+LAN). Never forward the port to the internet — see SECURITY.md and
+[Remote access](remote-access.md) instead.
 
 ## See also
 
-- [Raspberry Pi deployment](install-raspberry-pi.md)
 - [Troubleshoot discovery](troubleshoot-discovery.md)
+- [Install on a NAS](../nas/README.md)

@@ -4,6 +4,25 @@ All notable changes. Format based on [Keep a Changelog](https://keepachangelog.c
 
 ## [Unreleased]
 
+## [0.4.0] — NAS installation
+
+### Added
+
+- NAS installation for non-technical users (Synology Container Manager, QNAP Container Station): release file `compose.yaml` with the image pinned by digest, guides in English and German (`docs/nas/`: install, update, uninstall, troubleshooting), [what Hallido does](docs/explanation/what-hallido-does.md) (ports, connections, files, rights, data) and [verify the image](docs/how-to/verify-image.md)
+- Container image `ghcr.io/ohm-meter/hallido` (ADR 0021): linux/amd64, arm64, arm/v7; distroless without shell, user 65532, read-only root filesystem, no capabilities, built-in health check (`-healthcheck`); signed keyless with cosign, SBOM and provenance, vulnerability gate (Grype, govulncheck) in release and CI
+- First-run setup in the web app (ADR 0022): without a token the container opens a wizard that creates a strong access key on the server and shows it once, searches the speakers and offers the first scene; open only from the home network, for one hour after the start and only once
+- Setup and operations log (ADR 0023): web app Speakers → Log, rotated file in `/data/logs` (`-log-dir` / `SRA_LOG_DIR`), secrets redacted; `GET /api/v1/logs`
+- `SRA_LISTEN` (listen address), `SRA_RADIO_SEARCH=0` (turn the Radio Browser search off)
+
+### Changed
+
+- Docker image defaults: real speakers (`SRA_DRIVER=sonos`), port **8790** instead of 8080, first-run setup on, log in `/data/logs`; `deploy/docker-compose.yml` is now a local mock test without a required token
+- Release builds use the current Go toolchain (1.27); GitHub Actions pinned by commit SHA
+
+### Fixed
+
+- Faster scene start: `Play` gets its own 25 s timeout and is not sent twice when a large group's coordinator answers slowly; speakers already in the group are not regrouped, volumes are set in parallel, the log shows the duration of each phase
+
 ## [0.3.0] — first public release of Hallido
 
 ### Added

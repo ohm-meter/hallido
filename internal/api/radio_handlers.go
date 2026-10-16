@@ -18,7 +18,16 @@ type radioSearcher interface {
 	Search(ctx context.Context, query string, limit int) ([]radio.Station, error)
 }
 
+// DisableRadioSearch turns the station search off (SRA_RADIO_SEARCH=0): the
+// agent then makes no connection to the Radio Browser directory at all.
+func (s *Server) DisableRadioSearch() { s.radio = nil }
+
 func (s *Server) handleRadioSearch(w http.ResponseWriter, r *http.Request) {
+	if s.radio == nil {
+		writeError(w, s.log, apperr.New(apperr.CodeRadioSearchFailed, "Radio search is turned off").
+			WithHint("Enter the stream URL of the station instead, or set SRA_RADIO_SEARCH=1."))
+		return
+	}
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
 		writeError(w, s.log, apperr.New(apperr.CodeBadRequest, "Query parameter q missing").

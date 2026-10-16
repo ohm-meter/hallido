@@ -104,6 +104,11 @@
             <span class="btn-label" data-i18n="speakers.saveConfig">Save speakers to config</span>
             <span data-lucide="chevron-right" class="lucide-icon setting-chevron"></span>
           </button>
+          <button type="button" class="setting" id="logBtn">
+            <span data-lucide="scroll-text" class="lucide-icon setting-icon"></span>
+            <span class="btn-label" data-i18n="log.title">Log</span>
+            <span data-lucide="chevron-right" class="lucide-icon setting-chevron"></span>
+          </button>
           <button type="button" class="setting" id="tokenBtn">
             <span data-lucide="pencil" class="lucide-icon setting-icon"></span>
             <span class="btn-label" data-i18n="token.change">Change API token</span>
@@ -376,6 +381,103 @@
     </form>
   </dialog>
 
+  <!-- First-run setup (ADR 0022): shown only while the agent has no token yet -->
+  <dialog id="setupDialog" class="sheet sheet-full setup-sheet" aria-labelledby="setupTitle" aria-describedby="setupLead">
+    <div class="sheet-body setup-body">
+      <p class="setup-brand">Hallido <em>Powered by siraris</em></p>
+      <p class="setup-stepno" id="setupStepNo" aria-live="polite"></p>
+
+      <section class="setup-step" data-setup-step="welcome">
+        <h2 id="setupTitle" data-i18n="setup.welcome.title">Welcome to Hallido</h2>
+        <p id="setupLead" data-i18n="setup.welcome.text">Hallido plays radio on your Sonos speakers – as groups, at the push of a button or as a wake-up alarm. Setup takes about two minutes.</p>
+        <p data-i18n="setup.welcome.key">First, Hallido creates a personal access key. Only devices that know this key can operate Hallido.</p>
+        <div class="setup-actions">
+          <button type="button" class="pill primary" id="setupCreateBtn">
+            <span data-lucide="key-round" class="lucide-icon btn-icon"></span>
+            <span data-i18n="setup.welcome.create">Create access key</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="setup-step" data-setup-step="token" hidden>
+        <h2 data-i18n="setup.token.title">Your access key</h2>
+        <p data-i18n="setup.token.text">This key is shown only now. This browser remembers it. On other phones or computers, enter it once under Speakers → Change API token.</p>
+        <output class="setup-token" id="setupToken" aria-label="Access key" data-i18n-aria="setup.token.title"></output>
+        <div class="setup-actions">
+          <button type="button" class="pill" id="setupCopyBtn">
+            <span data-lucide="copy" class="lucide-icon btn-icon"></span>
+            <span class="btn-label" data-i18n="setup.token.copy">Copy</span>
+          </button>
+        </div>
+        <p class="field-hint" data-i18n="setup.token.keep">Keep it safe, for example in your password manager or on paper next to your NAS. Never share it publicly.</p>
+        <label class="switch-row setup-confirm">
+          <span data-i18n="setup.token.saved">I have saved the access key</span>
+          <input type="checkbox" role="switch" id="setupSavedCheck">
+        </label>
+        <div class="setup-actions">
+          <button type="button" class="pill primary" id="setupTokenNext" disabled data-i18n="setup.next">Next</button>
+        </div>
+      </section>
+
+      <section class="setup-step" data-setup-step="speakers" hidden>
+        <h2 data-i18n="setup.speakers.title">Find speakers</h2>
+        <p data-i18n="setup.speakers.text">Hallido looks for Sonos speakers in your home network.</p>
+        <p class="field-hint" id="setupSpeakerHint" role="status"></p>
+        <ul class="setup-speakers" id="setupSpeakerList" aria-live="polite"></ul>
+        <div class="setup-actions">
+          <button type="button" class="pill" id="setupSearchBtn" aria-busy="false">
+            <span data-lucide="refresh-cw" class="lucide-icon btn-icon"></span>
+            <span data-i18n="setup.speakers.search">Search again</span>
+          </button>
+          <button type="button" class="pill primary" id="setupSpeakersNext" data-i18n="setup.next">Next</button>
+        </div>
+      </section>
+
+      <section class="setup-step" data-setup-step="done" hidden>
+        <h2 data-i18n="setup.done.title">Hallido is ready</h2>
+        <p data-i18n="setup.done.text">Next, create your first scene: a radio station on one or more speakers. A schedule then turns a scene into a wake-up alarm (tab “Schedules”).</p>
+        <div class="setup-actions setup-actions-stack">
+          <button type="button" class="pill primary" id="setupSceneBtn">
+            <span data-lucide="plus" class="lucide-icon btn-icon"></span>
+            <span data-i18n="setup.done.scene">Create first scene</span>
+          </button>
+          <button type="button" class="pill" id="setupFinishBtn" data-i18n="setup.done.later">Later</button>
+        </div>
+      </section>
+
+      <section class="setup-step" data-setup-step="blocked" hidden>
+        <h2 id="setupBlockedTitle"></h2>
+        <p id="setupBlockedText"></p>
+        <div class="setup-actions">
+          <button type="button" class="pill primary" id="setupRetryBtn">
+            <span data-lucide="refresh-cw" class="lucide-icon btn-icon"></span>
+            <span data-i18n="setup.retry">Try again</span>
+          </button>
+        </div>
+      </section>
+
+      <p class="field-hint error" id="setupError" role="alert" hidden></p>
+    </div>
+  </dialog>
+
+  <!-- Setup and operations log (ADR 0023) -->
+  <dialog id="logSheet" class="sheet" aria-labelledby="logTitle">
+    <div class="sheet-grab" aria-hidden="true"></div>
+    <header class="sheet-head">
+      <h2 id="logTitle" data-i18n="log.title">Log</h2>
+      <button type="button" class="icon-btn" id="logRefreshBtn" aria-label="Refresh log" data-i18n-aria="log.refresh">
+        <span data-lucide="refresh-cw" class="lucide-icon bar-icon"></span>
+      </button>
+      <button type="button" class="icon-btn" data-close-dialog aria-label="Close" data-i18n-aria="common.close">
+        <span data-lucide="x" class="lucide-icon bar-icon"></span>
+      </button>
+    </header>
+    <div class="sheet-body">
+      <p class="field-hint" id="logHint" role="status"></p>
+      <ol class="log-list" id="logList" aria-live="polite"></ol>
+    </div>
+  </dialog>
+
   <dialog id="tokenDialog" aria-labelledby="tokenDialogTitle">
     <form method="dialog" id="tokenForm">
       <header>
@@ -392,6 +494,7 @@
 
   <script src="icons.js"></script>
   <script src="i18n.js"></script>
+  <script src="setup.js"></script>
   <script src="app.js"></script>
   <script src="pwa.js"></script>
 </body>

@@ -39,7 +39,10 @@ type device struct {
 
 // Controller steuert Sonos-Geraete. Alle Methoden sind nebenlaeufig sicher.
 type Controller struct {
-	client     *http.Client
+	client *http.Client
+	// playClient: wie client, mit laengerem Zeitlimit fuer AVTransport Play
+	// (Sonos antwortet erst, wenn die Wiedergabe anlaeuft).
+	playClient *http.Client
 	retryPause time.Duration
 	log        *slog.Logger
 
@@ -89,6 +92,7 @@ var (
 func New(overrides map[string]string, log *slog.Logger) *Controller {
 	return &Controller{
 		client:     &http.Client{Timeout: soapTimeout},
+		playClient: &http.Client{Timeout: playSOAPTimeout},
 		retryPause: retryPause,
 		log:        log,
 		overrides:  cloneOverrides(overrides),
@@ -540,6 +544,12 @@ func (c *Controller) Play(ctx context.Context, coordinator string, src speaker.S
 // gelegentlich mehr als 5 s (Issue #9).
 const soapTimeout = 10 * time.Second
 
+// playSOAPTimeout ist das Zeitlimit fuer AVTransport Play. Sonos antwortet
+// erst, wenn die Wiedergabe anlaeuft: allein 2-3 s, als Coordinator einer
+// 8er-Gruppe mit TuneIn-Favorit mehr als 10 s (Hardware 2026-10-15). Mit dem
+// allgemeinen soapTimeout lief Play dort ab und wurde unnoetig wiederholt.
+const playSOAPTimeout = 25 * time.Second
+
 // retryPause ist die Wartezeit vor der einmaligen Wiederholung eines
 // zeitueberschrittenen Aufrufs.
 const retryPause = 300 * time.Millisecond
@@ -576,15 +586,59 @@ func (c *Controller) soapRetry(ctx context.Context, d *device, svc service, acti
 	return err
 }
 
+// startPlay sendet AVTransport Play mit playSOAPTimeout. Bleibt die Antwort
+// aus, entscheidet zuerst der Transportstatus: PLAYING oder TRANSITIONING
+// heisst, Play ist angekommen und die Box puffert noch — dann kein zweites
+// Play, ob sie wirklich spielt, prueft der Aufrufer danach. Nur wenn die Box
+// erkennbar nichts tut (z. B. kalte Verbindung nach Neustart, Issue #9), wird
+// Play einmal wiederholt. Abgelehnte Aufrufe (HTTP 500) werden nie wiederholt.
+func (c *Controller) startPlay(ctx context.Context, coord *device) error {
+	args := []arg{{"InstanceID", "0"}, {"Speed", "1"}}
+	_, err := c.soapCallClient(ctx, c.playClient, coord, avTransport, "Play", args)
+	if err == nil || ctx.Err() != nil || apperr.As(err).Code != apperr.CodeSpeakerUnreachable {
+		return err
+	}
+	switch state := c.transportState(ctx, coord); state {
+	case "PLAYING", "TRANSITIONING":
+		c.log.Warn("play without response, speaker is starting", "speaker", coord.name, "state", state)
+		return nil
+	}
+	c.log.Warn("play without response, retrying once", "speaker", coord.name)
+	select {
+	case <-ctx.Done():
+		return err
+	case <-time.After(c.retryPause):
+	}
+	if _, err = c.soapCallClient(ctx, c.playClient, coord, avTransport, "Play", args); err == nil {
+		return nil
+	}
+	if apperr.As(err).Code == apperr.CodeSpeakerUnreachable && c.isPlaying(ctx, coord) {
+		c.log.Warn("play without response, speaker is playing though", "speaker", coord.name)
+		return nil
+	}
+	return err
+}
+
+// transportState liest den AVTransport-Status (z. B. PLAYING, TRANSITIONING)
+// mit kurzem, vom Aufrufer unabhaengigem Zeitlimit; leer, wenn unlesbar.
+func (c *Controller) transportState(ctx context.Context, d *device) string {
+	vctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), verifyTimeout)
+	defer cancel()
+	body, err := c.soapCall(vctx, d, avTransport, "GetTransportInfo", []arg{{"InstanceID", "0"}})
+	if err != nil {
+		return ""
+	}
+	return strings.ToUpper(strings.TrimSpace(extractTransportState(body)))
+}
+
 // setURIAndPlay setzt eine Stream-URI (als Sonos-Radio) auf dem Coordinator
 // und startet die Wiedergabe. Vorher ermittelt eine kurze Probe das
 // Stream-Format (MP3 -> x-rincon-mp3radio, AAC -> aac://); ein Stream, der mit
 // HTTP-Fehler antwortet, wird gar nicht erst an die Box gegeben.
 //
-// SetAVTransportURI und Play werden bei Zeitueberschreitung einmal
-// wiederholt; scheitert auch Play danach, zaehlt ein Folgeabruf des
-// Transportstatus: spielt die Box bereits, war der Befehl angekommen und nur
-// die Antwort zu spaet. Nach erfolgreichem Play muss der Coordinator binnen
+// SetAVTransportURI wird bei Zeitueberschreitung einmal wiederholt, Play
+// laeuft ueber startPlay (laengeres Zeitlimit, Wiederholung nur, wenn die Box
+// erkennbar nichts tut). Nach erfolgreichem Play muss der Coordinator binnen
 // playVerifyWindow PLAYING melden, sonst gilt die Wiedergabe als gescheitert
 // (Sonos quittiert Play auch fuer Streams, die es nicht abspielen kann).
 func (c *Controller) setURIAndPlay(ctx context.Context, coord *device, rawURI string) error {
@@ -605,15 +659,7 @@ func (c *Controller) setURIAndPlay(ctx context.Context, coord *device, rawURI st
 	}); err != nil {
 		return err
 	}
-	err := c.soapRetry(ctx, coord, avTransport, "Play", []arg{
-		{"InstanceID", "0"},
-		{"Speed", "1"},
-	})
-	if err != nil && apperr.As(err).Code == apperr.CodeSpeakerUnreachable && c.isPlaying(ctx, coord) {
-		c.log.Warn("play without response, speaker is playing though", "speaker", coord.name)
-		return nil
-	}
-	if err != nil {
+	if err := c.startPlay(ctx, coord); err != nil {
 		return err
 	}
 	return c.verifyPlaying(ctx, coord, rawURI, info)

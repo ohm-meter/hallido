@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"sonos-radio-agent/internal/apperr"
@@ -62,7 +63,7 @@ type Status struct {
 type Scheduler struct {
 	runner Runner
 	clock  Clock
-	loc    *time.Location
+	loc    atomic.Pointer[time.Location] // replaceable (first-run setup sets the time zone)
 	log    *slog.Logger
 
 	mu     sync.Mutex
@@ -79,15 +80,16 @@ func New(list []Schedule, loc *time.Location, runner Runner, clock Clock, log *s
 	if loc == nil {
 		loc, _ = LoadLocation("")
 	}
-	return &Scheduler{
+	s := &Scheduler{
 		runner: runner,
 		clock:  clock,
-		loc:    loc,
 		log:    log,
 		list:   cloneList(list),
 		last:   map[string]RunInfo{},
 		reload: make(chan struct{}, 1),
 	}
+	s.loc.Store(loc)
+	return s
 }
 
 func cloneList(in []Schedule) []Schedule {
@@ -100,10 +102,22 @@ func cloneList(in []Schedule) []Schedule {
 }
 
 // Location liefert die Zeitzone der Zeitplaene.
-func (s *Scheduler) Location() *time.Location { return s.loc }
+func (s *Scheduler) Location() *time.Location { return s.loc.Load() }
+
+// SetLocation changes the time zone of all schedules (first-run setup).
+func (s *Scheduler) SetLocation(loc *time.Location) {
+	if loc == nil {
+		return
+	}
+	s.loc.Store(loc)
+	select {
+	case s.reload <- struct{}{}:
+	default:
+	}
+}
 
 // Now liefert die aktuelle Zeit der Scheduler-Uhr in dessen Zeitzone.
-func (s *Scheduler) Now() time.Time { return s.clock.Now().In(s.loc) }
+func (s *Scheduler) Now() time.Time { return s.clock.Now().In(s.Location()) }
 
 // Reload ersetzt die Zeitplaene (Hot-Reload nach Config-Schreiben). Laufende
 // Fenster werden nicht neu gestartet; ein Catch-up gibt es nur beim Start.
@@ -155,16 +169,16 @@ func (s *Scheduler) Statuses() []Status {
 			st.LastRun = &ri
 		}
 		if sc.Enabled {
-			if w, ok := sc.activeWindow(now, s.loc); ok {
+			if w, ok := sc.activeWindow(now, s.Location()); ok {
 				st.Active = true
-				stop := w.stop.In(s.loc)
+				stop := w.stop.In(s.Location())
 				st.NextStop = &stop
 			}
-			if w, ok := sc.nextWindow(now, s.loc); ok {
-				start := w.start.In(s.loc)
+			if w, ok := sc.nextWindow(now, s.Location()); ok {
+				start := w.start.In(s.Location())
 				st.NextStart = &start
 				if st.NextStop == nil && !w.stop.IsZero() {
-					stop := w.stop.In(s.loc)
+					stop := w.stop.In(s.Location())
 					st.NextStop = &stop
 				}
 			}
@@ -190,7 +204,7 @@ func (s *Scheduler) Statuses() []Status {
 // Run fuehrt die Zeitplaene aus, bis ctx endet. Beim Start werden Szenen,
 // deren Fenster gerade laeuft, nachgeholt (Catch-up).
 func (s *Scheduler) Run(ctx context.Context) {
-	s.log.Info("scheduler started", "timezone", s.loc.String(), "schedules", len(s.snapshot()))
+	s.log.Info("scheduler started", "timezone", s.Location().String(), "schedules", len(s.snapshot()))
 	last := s.clock.Now()
 	s.catchUp(ctx, last)
 
@@ -234,7 +248,7 @@ func (s *Scheduler) nextEvent(after time.Time) (time.Time, bool) {
 		if !sc.Enabled {
 			continue
 		}
-		if at, ok := sc.nextEventAfter(after, s.loc); ok && (best.IsZero() || at.Before(best)) {
+		if at, ok := sc.nextEventAfter(after, s.Location()); ok && (best.IsZero() || at.Before(best)) {
 			best = at
 		}
 	}
@@ -246,7 +260,7 @@ func (s *Scheduler) fire(ctx context.Context, from, to time.Time) {
 	var events []event
 	for _, sc := range s.snapshot() {
 		if sc.Enabled {
-			events = append(events, sc.eventsBetween(from, to, s.loc)...)
+			events = append(events, sc.eventsBetween(from, to, s.Location())...)
 		}
 	}
 	sort.SliceStable(events, func(i, j int) bool { return events[i].at.Before(events[j].at) })
@@ -273,7 +287,7 @@ func (s *Scheduler) catchUp(ctx context.Context, now time.Time) {
 		if !sc.Enabled {
 			continue
 		}
-		if _, ok := sc.activeWindow(now, s.loc); !ok {
+		if _, ok := sc.activeWindow(now, s.Location()); !ok {
 			continue
 		}
 		st, err := s.status(ctx, sc.Scene)

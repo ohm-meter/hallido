@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"sonos-radio-agent/internal/radio"
@@ -58,4 +59,13 @@ func newTestServerRadio(client *radio.Client) http.Handler {
 	s := newTestServerStruct(mock.New("Wohnzimmer"), "")
 	s.radio = client
 	return s.Handler()
+}
+
+func TestRadioSearch_Disabled(t *testing.T) {
+	srv := newTestServerStruct(mock.New("Wohnzimmer"), "")
+	srv.DisableRadioSearch()
+	rec := do(t, srv.Handler(), "GET", "/api/v1/radio/search?q=fm4", testToken)
+	if rec.Code != http.StatusBadGateway || !strings.Contains(rec.Body.String(), "turned off") {
+		t.Fatalf("code %d: %s", rec.Code, rec.Body)
+	}
 }

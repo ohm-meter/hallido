@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" role="img" aria-label="Synology: Package Center → Container Manager → Install">
+  <rect width="800" height="450" fill="#f4efe3"/>
+  <rect x="16" y="16" width="768" height="418" rx="12" fill="none" stroke="#b56d18" stroke-width="3" stroke-dasharray="12 8"/>
+  <text x="400" y="170" text-anchor="middle" font-family="sans-serif" font-size="22" fill="#9a8f73">Screenshot follows · Screenshot folgt</text>
+  <text x="400" y="230" text-anchor="middle" font-family="sans-serif" font-size="19" font-weight="bold" fill="#1a1206">Synology: Package Center → Container Manager → Install</text>
+  <text x="400" y="275" text-anchor="middle" font-family="sans-serif" font-size="17" fill="#1a1206">Synology: Paket-Zentrum → Container Manager → Installieren</text>
+  <text x="400" y="400" text-anchor="middle" font-family="monospace" font-size="14" fill="#9a8f73">docs/nas/img/synology-01-package-center.svg</text>
+</svg>

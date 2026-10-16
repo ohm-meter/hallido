@@ -105,6 +105,7 @@ func TestProtectedRoutesRequireToken(t *testing.T) {
 		{"GET", "/api/v1/sonos/favorites"},
 		{"GET", "/api/v1/radio/search?q=fm4"},
 		{"POST", "/api/v1/config/scenes/from-favorite"},
+		{"GET", "/api/v1/logs"},
 	}
 	for _, r := range routes {
 		for _, tok := range []string{"", "falsch"} {
@@ -118,7 +119,7 @@ func TestProtectedRoutesRequireToken(t *testing.T) {
 
 func TestLeeresServerTokenAkzeptiertNie(t *testing.T) {
 	t.Parallel()
-	s := &Server{token: "", log: newTestServerStruct(mock.New(), "").log}
+	s := &Server{log: newTestServerStruct(mock.New(), "").log}
 	h := s.requireToken(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
 	rec := httptest.NewRecorder()
 	h(rec, httptest.NewRequest("GET", "/x", nil))

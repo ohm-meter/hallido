@@ -59,6 +59,11 @@ type arg struct{ Name, Value string }
 // als "playback_failed" zurueckgegeben -- damit der Aufrufer sinnvoll
 // unterscheiden kann.
 func (c *Controller) soapCall(ctx context.Context, d *device, svc service, action string, args []arg) ([]byte, error) {
+	return c.soapCallClient(ctx, c.client, d, svc, action, args)
+}
+
+// soapCallClient wie soapCall, mit eigenem HTTP-Client (Zeitlimit).
+func (c *Controller) soapCallClient(ctx context.Context, client *http.Client, d *device, svc service, action string, args []arg) ([]byte, error) {
 	body := buildEnvelope(svc.serviceType, action, args)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.baseURL+svc.controlPath, strings.NewReader(body))
 	if err != nil {
@@ -67,7 +72,7 @@ func (c *Controller) soapCall(ctx context.Context, d *device, svc service, actio
 	req.Header.Set("Content-Type", `text/xml; charset="utf-8"`)
 	req.Header.Set("SOAPACTION", fmt.Sprintf(`"%s#%s"`, svc.serviceType, action))
 
-	resp, err := c.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		ip := ipFromBaseURL(d.baseURL)
 		hint := fmt.Sprintf("No SOAP response from %s:1400 — speaker powered on and on the same network?", ip)

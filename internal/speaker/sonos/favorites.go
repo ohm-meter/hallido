@@ -264,15 +264,7 @@ func (c *Controller) playServiceFavorite(ctx context.Context, coord *device, fav
 		}); err != nil {
 			return err
 		}
-		err := c.soapRetry(ctx, coord, avTransport, "Play", []arg{
-			{"InstanceID", "0"},
-			{"Speed", "1"},
-		})
-		if err != nil && apperr.As(err).Code == apperr.CodeSpeakerUnreachable && c.isPlaying(ctx, coord) {
-			c.log.Warn("play ohne antwort, box spielt aber", "speaker", coord.name)
-			return nil
-		}
-		if err != nil {
+		if err := c.startPlay(ctx, coord); err != nil {
 			return err
 		}
 		var started bool

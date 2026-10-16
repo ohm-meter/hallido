@@ -89,6 +89,20 @@ make run                             # mock driver, no speakers needed
 Open <http://localhost:8080> and enter the token. With real speakers:
 `make dev` (Sonos driver). Guided version: [First run tutorial](docs/tutorials/first-run-local.md).
 
+## Installation on a NAS (Synology, QNAP)
+
+Download `compose.yaml` from the
+[latest release](https://github.com/ohm-meter/hallido/releases/latest),
+create a project with it in **Container Manager** (Synology) or an
+application in **Container Station** (QNAP), open
+`http://<your-NAS>:8790` and follow the setup wizard. The image is signed,
+pinned by digest, runs without root and without any special rights.
+
+Step-by-step guide for non-technical users:
+[English](docs/nas/en/README.md) · [Deutsch](docs/nas/de/README.md) ·
+[What Hallido does on your NAS](docs/explanation/what-hallido-does.md) ·
+[Verify the image](docs/how-to/verify-image.md).
+
 ## Installation (Linux, including Raspberry Pi)
 
 **Without Go:** download the prebuilt binary for your architecture from

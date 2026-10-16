@@ -51,10 +51,8 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parse config (%s): %w", path, err)
 	}
 
-	// Env-Variable hat Vorrang fuer das Token.
-	if env := os.Getenv("SRA_API_TOKEN"); env != "" {
-		cfg.APIToken = env
-	}
+	// Env variables take precedence (token, listen address).
+	applyEnv(&cfg)
 	if cfg.Listen == "" {
 		cfg.Listen = ":8080"
 	}

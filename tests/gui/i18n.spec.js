@@ -191,7 +191,7 @@ test("index.html: every visible text and label is translatable (data-i18n*)", as
     const doc = new DOMParser().parseFromString(html, "text/html");
     // Allowlist: brand, data filled in by app.js, text without words (numbers,
     // symbols, punctuation) and URLs.
-    const ALLOWED_HOSTS = [".brand-text", "#speakerCount", "#scheduleTz"];
+    const ALLOWED_HOSTS = [".brand-text", ".setup-brand", "#speakerCount", "#scheduleTz"];
     const allowedText = (s) => !/[A-Za-zÄÖÜäöüß]{2,}/.test(s) || /^https?:\/\//.test(s);
     const out = [];
     const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);

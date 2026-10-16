@@ -11,9 +11,11 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"sonos-radio-agent/internal/apperr"
+	"sonos-radio-agent/internal/applog"
 	"sonos-radio-agent/internal/radio"
 	"sonos-radio-agent/internal/scenes"
 	"sonos-radio-agent/internal/schedule"
@@ -49,7 +51,9 @@ const rateLimitPerMinute = 300
 type Server struct {
 	scenes        *scenes.Service
 	ctrl          speaker.SpeakerController
-	token         string
+	tokenHash     atomic.Pointer[[32]byte] // nil = no token (setup open) -> every request 401
+	setup         *setupState              // nil = first-run setup not active
+	logs          *applog.Store            // nil = no log view
 	cfgPath       string
 	knownMu       sync.RWMutex
 	knownSpeakers map[string]string // Raumname -> IP (leer = nur Name aus Config/Szenen)
@@ -67,10 +71,9 @@ type Server struct {
 // cfgPath ist der Pfad zur config.json fuer Lese-/Schreib-Endpoints (leer = deaktiviert).
 // knownSpeakers enthaelt alle aus Config/Szenen referenzierten Raumnamen (IP optional).
 func New(svc *scenes.Service, ctrl speaker.SpeakerController, token, cfgPath string, knownSpeakers map[string]string, gui http.Handler, log *slog.Logger) *Server {
-	return &Server{
+	s := &Server{
 		scenes:        svc,
 		ctrl:          ctrl,
-		token:         token,
 		cfgPath:       cfgPath,
 		knownSpeakers: cloneSpeakerMap(knownSpeakers),
 		log:           log,
@@ -78,6 +81,8 @@ func New(svc *scenes.Service, ctrl speaker.SpeakerController, token, cfgPath str
 		gui:           gui,
 		radio:         radio.NewClient(),
 	}
+	s.setToken(token)
+	return s
 }
 
 // SetScheduler haengt den laufenden Scheduler ein (Status + Hot-Reload).
@@ -102,6 +107,10 @@ func (s *Server) Handler() http.Handler {
 
 	// Offen (kein Token): Health und die GUI-Seite selbst.
 	mux.HandleFunc("GET /api/v1/health", s.handleHealth)
+	// First-run setup (ADR 0022): open only while setup is active, from the
+	// home network and within the time window -- checked in the handlers.
+	mux.HandleFunc("GET /api/v1/setup", s.handleSetupStatus)
+	mux.HandleFunc("POST /api/v1/setup/token", s.handleSetupToken)
 	// Catch-all: GUI-Dateien; unbekannte /api/-Pfade bekommen den stabilen
 	// JSON-Fehler statt der Datei-404 der GUI.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -124,6 +133,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/v1/scenes/{id}/play", s.requireToken(s.handlePlayScene))
 	mux.HandleFunc("POST /api/v1/scenes/{id}/stop", s.requireToken(s.handleStopScene))
 	s.registerGroupRoutes(mux) // Pause/Resume, Boxen-Gruppen (group.go)
+	mux.HandleFunc("GET /api/v1/logs", s.requireToken(s.handleLogs))
 	mux.HandleFunc("GET /api/v1/schedules", s.requireToken(s.handleSchedulesStatus))
 	mux.HandleFunc("GET /api/v1/config/schedules", s.requireToken(s.handleScheduleConfigList))
 	mux.HandleFunc("POST /api/v1/config/schedules", s.requireToken(s.handleScheduleUpsert))

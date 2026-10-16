@@ -20,6 +20,9 @@ func TestHTTPStatusMapping(t *testing.T) {
 		CodeNotFound:           http.StatusNotFound,
 		CodeRateLimited:        http.StatusTooManyRequests,
 		CodeInternal:           http.StatusInternalServerError,
+		CodeForbidden:          http.StatusForbidden,
+		CodeSetupClosed:        http.StatusForbidden,
+		CodeAlreadySetUp:       http.StatusConflict,
 		"unbekannt":            http.StatusInternalServerError,
 	}
 	for code, want := range cases {

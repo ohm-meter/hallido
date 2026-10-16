@@ -1,0 +1,7 @@
+# Only go.mod, cmd/ and internal/ are needed for the image build.
+*
+!go.mod
+!cmd/
+!internal/
+internal/web/static/vendor/pico.css
+internal/web/static/vendor/lucide/

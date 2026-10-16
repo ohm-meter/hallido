@@ -29,12 +29,20 @@ vet: ## Static analysis
 	go vet $(PKG)
 
 .PHONY: test
-test: vet test-install ## Run tests + vet (required before a commit)
+test: vet test-install test-nas ## Run tests + vet (required before a commit)
 	go test $(RACE) $(PKG)
 
 .PHONY: test-install
 test-install: ## Install layout: .install-meta parser, unit migration (no root)
 	./scripts/test/install-layout.sh
+
+.PHONY: test-nas
+test-nas: ## NAS project file: render template, check hardening
+	./scripts/test/nas-compose.sh
+
+.PHONY: image
+image: ## Container image for this machine (hallido:dev), see Dockerfile
+	docker buildx build --load -t hallido:dev .
 
 .PHONY: test-install-docker
 test-install-docker: ## Migration old -> new layout with real paths (Docker)

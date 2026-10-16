@@ -49,6 +49,9 @@ used by the web app's German locale. Keep new texts consistent with this list.
 | Settings | Einstellungen |
 | Appearance / Dark / Light | Design / Dunkel / Hell |
 | Change API token | API-Token ändern |
+| Access key (setup wizard; the API token in plain words) | Zugangsschlüssel |
+| Setup / Step 2 of 4 | Einrichtung / Schritt 2 von 4 |
+| Log (Speakers tab) | Protokoll |
 | Search radio | Radio suchen |
 | Search stations, e.g. FM4 | Sender suchen, z. B. FM4 |
 | From speaker | Von Box |

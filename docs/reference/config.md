@@ -54,6 +54,12 @@ File: `config.json` (template: `config.example.json`). Loaded at startup. Change
 | `-config` | `config.json` | Path to the config |
 | `-driver` / `SRA_DRIVER` | `mock` | `mock` or `sonos` |
 | `-debug` | off | More logging |
+| `SRA_LISTEN` | — | Overrides `listen` (e.g. `:8790`) |
+| `-setup` / `SRA_SETUP` | off | First-run setup in the web app if no token is configured ([ADR 0022](../adr/0022-first-run-setup.md)); on in the container image |
+| `SRA_SETUP_WINDOW` | `1h` | How long setup stays open after the start (Go duration, e.g. `30m`) |
+| `-log-dir` / `SRA_LOG_DIR` | — | Directory for the setup and operations log, rotated ([ADR 0023](../adr/0023-operations-log.md)); container: `/data/logs` |
+| `SRA_RADIO_SEARCH` | on | `0` turns the Radio Browser station search off (no connection to the directory) |
+| `-healthcheck` | — | Check that the local agent answers, exit 0/1 (container `HEALTHCHECK`) |
 
 ## Security
 

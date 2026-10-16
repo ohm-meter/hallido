@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"sonos-radio-agent/internal/api"
+	"sonos-radio-agent/internal/applog"
 	"sonos-radio-agent/internal/config"
 	"sonos-radio-agent/internal/scenes"
 	"sonos-radio-agent/internal/schedule"
@@ -26,11 +28,34 @@ func main() {
 	driver := flag.String("driver", envOr("SRA_DRIVER", "mock"),
 		"Speaker driver: mock | sonos")
 	debug := flag.Bool("debug", false, "verbose logging")
+	setup := flag.Bool("setup", envBool("SRA_SETUP"),
+		"allow first-run setup in the web app when no API token is configured (container image)")
+	logDir := flag.String("log-dir", os.Getenv("SRA_LOG_DIR"),
+		"directory for the setup and operations log (empty = stdout and web app only)")
+	healthcheck := flag.Bool("healthcheck", false,
+		"check that the local agent answers and exit (container HEALTHCHECK)")
 	flag.Parse()
 
-	log := newLogger(*debug)
+	if *healthcheck {
+		os.Exit(runHealthcheck(*cfgPath))
+	}
 
-	cfg, err := config.Load(*cfgPath)
+	log, logStore, logErr := applog.New(os.Stdout, applog.Options{Dir: *logDir, Debug: *debug})
+	defer logStore.Close()
+	if logErr != nil {
+		log.Warn("log file disabled", "dir", *logDir, "err", logErr)
+	}
+
+	var (
+		cfg        *config.Config
+		err        error
+		needsSetup bool
+	)
+	if *setup {
+		cfg, needsSetup, err = config.LoadForSetup(*cfgPath)
+	} else {
+		cfg, err = config.Load(*cfgPath)
+	}
 	if err != nil {
 		log.Error("invalid configuration", "err", err)
 		os.Exit(1)
@@ -43,7 +68,19 @@ func main() {
 	}
 
 	svc := scenes.NewService(cfg.Scenes, ctrl, log)
-	srv := api.New(svc, ctrl, cfg.APIToken, *cfgPath, cfg.KnownSpeakers(), web.Handler(), log)
+	token := cfg.APIToken
+	if needsSetup {
+		token = "" // placeholder or empty: no request is accepted until setup
+	}
+	srv := api.New(svc, ctrl, token, *cfgPath, cfg.KnownSpeakers(), web.Handler(), log)
+	srv.SetLogStore(logStore)
+	if v := os.Getenv("SRA_RADIO_SEARCH"); v != "" && !envBool("SRA_RADIO_SEARCH") {
+		srv.DisableRadioSearch()
+		log.Info("radio search turned off (SRA_RADIO_SEARCH) -- no connection to the station directory")
+	}
+	if needsSetup {
+		srv.EnableSetup(envDuration("SRA_SETUP_WINDOW", api.DefaultSetupWindow, log))
+	}
 
 	// Zeitplaene laufen im selben Prozess; ctx endet bei SIGINT/SIGTERM.
 	runCtx, stopRun := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -68,7 +105,7 @@ func main() {
 
 	go func() {
 		log.Info("agent started", "listen", cfg.Listen, "driver", *driver,
-			"scenes", len(cfg.Scenes), "schedules", len(cfg.Schedules))
+			"scenes", len(cfg.Scenes), "schedules", len(cfg.Schedules), "setup_open", needsSetup)
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Error("http server stopped", "err", err)
 			os.Exit(1)
@@ -124,12 +161,22 @@ func referencedSpeakers(cfg *config.Config) []string {
 	return out
 }
 
-func newLogger(debug bool) *slog.Logger {
-	level := slog.LevelInfo
-	if debug {
-		level = slog.LevelDebug
+func envBool(key string) bool {
+	v, _ := strconv.ParseBool(os.Getenv(key))
+	return v
+}
+
+func envDuration(key string, fallback time.Duration, log *slog.Logger) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
 	}
-	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		log.Warn("invalid duration, using default", "env", key, "value", v, "default", fallback.String())
+		return fallback
+	}
+	return d
 }
 
 func envOr(key, fallback string) string {

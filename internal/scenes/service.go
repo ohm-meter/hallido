@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"sort"
 	"sync"
+	"time"
 
 	"sonos-radio-agent/internal/apperr"
 	"sonos-radio-agent/internal/speaker"
@@ -207,6 +208,7 @@ func (s *Service) Play(ctx context.Context, id string) (*PlayResult, error) {
 	defer s.lockBoxes(scene)()
 
 	coordinator := scene.Coordinator()
+	start := time.Now()
 	if err := s.validateMembers(ctx, scene); err != nil {
 		return nil, err
 	}
@@ -222,36 +224,62 @@ func (s *Service) Play(ctx context.Context, id string) (*PlayResult, error) {
 	// 0. Ist der Coordinator gerade nur Mitglied einer anderen Gruppe (z. B.
 	//    in der Sonos-App gruppiert), lehnt Sonos jeden Beitritt mit UPnP 800
 	//    ab -- dann spielte nur der Coordinator allein.
-	s.ensureStandaloneCoordinator(ctx, id, coordinator)
+	grouped := s.ensureStandaloneCoordinator(ctx, id, coordinator)
+	tPrepare := time.Since(start)
 
 	// 1. Sekundaer-Boxen gruppieren (jede einzeln, damit ein Ausfall die
-	//    anderen nicht mitreisst).
+	//    anderen nicht mitreisst). Boxen, die schon in der Gruppe des
+	//    Coordinators sind, bleiben unberuehrt (spart je einen SOAP-Aufruf).
+	t0 := time.Now()
+	skipped := 0
 	for _, m := range scene.Members {
 		if m.Speaker == coordinator {
+			continue
+		}
+		if grouped[m.Speaker] {
+			skipped++
 			continue
 		}
 		if err := s.ctrl.Group(ctx, coordinator, []string{m.Speaker}); err != nil {
 			s.markFailed(statusByName, m.Speaker, err)
 		}
 	}
+	tGroup := time.Since(t0)
 
-	// 2. Lautstaerke je Box setzen.
+	// 2. Lautstaerke je Box setzen — parallel, die Boxen sind unabhaengig.
+	t0 = time.Now()
+	var wg sync.WaitGroup
+	var failMu sync.Mutex
 	for _, m := range scene.Members {
 		if !statusByName[m.Speaker].OK {
 			continue // schon als ausgefallen markiert
 		}
-		if err := s.ctrl.SetVolume(ctx, m.Speaker, m.Volume); err != nil {
-			s.markFailed(statusByName, m.Speaker, err)
-		}
+		wg.Add(1)
+		go func(m Member) {
+			defer wg.Done()
+			if err := s.ctrl.SetVolume(ctx, m.Speaker, m.Volume); err != nil {
+				failMu.Lock()
+				s.markFailed(statusByName, m.Speaker, err)
+				failMu.Unlock()
+			}
+		}(m)
 	}
+	wg.Wait()
+	tVolume := time.Since(t0)
 
 	// 3. Wiedergabe auf dem Coordinator starten.
+	t0 = time.Now()
 	var coordPlayErr error
 	if statusByName[coordinator].OK {
 		if err := s.ctrl.Play(ctx, coordinator, scene.Source); err != nil {
 			s.markFailed(statusByName, coordinator, err)
 			coordPlayErr = err
 		}
+	}
+	tPlay := time.Since(t0)
+	timing := []any{
+		"took", ms(time.Since(start)), "prepare", ms(tPrepare), "group", ms(tGroup),
+		"already_grouped", skipped, "volume", ms(tVolume), "play", ms(tPlay),
 	}
 
 	// Coordinator ausgefallen -> keine Wiedergabe moeglich.
@@ -261,7 +289,7 @@ func (s *Service) Play(ctx context.Context, id string) (*PlayResult, error) {
 		if coordPlayErr != nil {
 			ae = apperr.As(coordPlayErr)
 			s.log.Warn("scene failed: playback on coordinator",
-				"scene", id, "coordinator", coordinator, "err", coordPlayErr)
+				append([]any{"scene", id, "coordinator", coordinator, "err", coordPlayErr}, timing...)...)
 		} else {
 			ae = apperr.As(coordinatorErr(statusByName[coordinator]))
 			s.log.Warn("scene failed: coordinator unreachable",
@@ -272,31 +300,43 @@ func (s *Service) Play(ctx context.Context, id string) (*PlayResult, error) {
 
 	result.Playing = true
 	s.syncStatuses(result, statusByName)
-	s.log.Info("scene started", "scene", id, "coordinator", coordinator)
+	s.log.Info("scene started", append([]any{"scene", id, "coordinator", coordinator}, timing...)...)
 	return result, nil
 }
 
 // ensureStandaloneCoordinator loest coordinator aus seiner Gruppe, wenn er
 // dort nicht selbst Coordinator ist. Best effort: scheitert die Topologie-
 // Abfrage oder das Loesen, laeuft Play normal weiter (die Gruppierung meldet
-// dann pro Box, was schiefging).
-func (s *Service) ensureStandaloneCoordinator(ctx context.Context, sceneID, coordinator string) {
+// dann pro Box, was schiefging). Fuehrt coordinator bereits eine Gruppe,
+// liefert es deren Mitglieder (ohne ihn) — die muessen nicht neu gruppiert
+// werden.
+func (s *Service) ensureStandaloneCoordinator(ctx context.Context, sceneID, coordinator string) map[string]bool {
 	groups, err := s.ctrl.GetGroups(ctx)
 	if err != nil {
 		s.log.Debug("group topology not readable before play", "scene", sceneID, "err", err)
-		return
+		return nil
 	}
 	g, ok := speaker.GroupOf(groups, coordinator)
-	if !ok || g.Coordinator == coordinator {
-		return
+	if !ok {
+		return nil
+	}
+	if g.Coordinator == coordinator {
+		members := make(map[string]bool, len(g.Members))
+		for _, m := range g.Members {
+			if m != coordinator {
+				members[m] = true
+			}
+		}
+		return members
 	}
 	if err := s.ctrl.Ungroup(ctx, coordinator); err != nil {
 		s.log.Warn("coordinator could not leave foreign group", "scene", sceneID,
 			"coordinator", coordinator, "group_coordinator", g.Coordinator, "err", err)
-		return
+		return nil
 	}
 	s.log.Info("coordinator left foreign group", "scene", sceneID,
 		"coordinator", coordinator, "group_coordinator", g.Coordinator)
+	return nil
 }
 
 func (s *Service) markFailed(byName map[string]*SpeakerStatus, name string, err error) {
@@ -359,3 +399,6 @@ func (s *Service) lockBoxes(scene Scene) func() {
 		}
 	}
 }
+
+// ms rundet eine Dauer fuers Log auf Millisekunden.
+func ms(d time.Duration) string { return d.Round(time.Millisecond).String() }

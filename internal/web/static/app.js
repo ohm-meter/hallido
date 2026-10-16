@@ -2371,7 +2371,8 @@ for (const btn of document.querySelectorAll("[data-close-dialog]")) {
     if (dlg) dlg.close();
   });
 }
-for (const dlg of document.querySelectorAll("dialog.sheet")) closeSheetOnBackdrop(dlg);
+// The setup wizard (setup.js) must not close on a stray tap.
+for (const dlg of document.querySelectorAll("dialog.sheet:not(#setupDialog)")) closeSheetOnBackdrop(dlg);
 
 // ---- Lautstaerken im ⋯-Sheet (Spotify-Geraete-Sheet): Slider + −/+ je Raum ----
 // Aenderungen werden in der Szene gespeichert (PUT config/scenes/{id}) und wirken
@@ -2863,6 +2864,86 @@ el.tokenForm.addEventListener("submit", (e) => {
 });
 el.tokenBtn.addEventListener("click", openTokenDialog);
 
+// ---- Setup and operations log (Speakers tab -> Log, ADR 0023) ----
+
+const LOG_LIMIT = 200;
+const LOG_LEVEL_KEYS = {
+  debug: "log.level.debug",
+  info: "log.level.info",
+  warn: "log.level.warn",
+  error: "log.level.error",
+};
+const logEl = {
+  btn: document.getElementById("logBtn"),
+  sheet: document.getElementById("logSheet"),
+  list: document.getElementById("logList"),
+  hint: document.getElementById("logHint"),
+  refresh: document.getElementById("logRefreshBtn"),
+};
+
+function formatLogTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso || "";
+  return d.toLocaleString(I18N.locale, { dateStyle: "short", timeStyle: "medium" });
+}
+
+function renderLogEntry(entry) {
+  const li = document.createElement("li");
+  const level = String(entry.level || "INFO").toLowerCase();
+  li.className = "log-entry log-" + level;
+  const head = document.createElement("div");
+  head.className = "log-head";
+  const time = document.createElement("time");
+  time.dateTime = entry.time || "";
+  time.textContent = formatLogTime(entry.time);
+  const badge = document.createElement("span");
+  badge.className = "log-level";
+  badge.textContent = LOG_LEVEL_KEYS[level] ? t(LOG_LEVEL_KEYS[level]) : level;
+  head.append(time, badge);
+  const msg = document.createElement("p");
+  msg.className = "log-msg";
+  msg.textContent = entry.msg || "";
+  li.append(head, msg);
+  const attrs = entry.attrs ? Object.keys(entry.attrs).sort() : [];
+  if (attrs.length) {
+    const meta = document.createElement("p");
+    meta.className = "log-attrs";
+    meta.textContent = attrs.map((k) => k + "=" + entry.attrs[k]).join("  ");
+    li.appendChild(meta);
+  }
+  return li;
+}
+
+async function loadLog() {
+  logEl.hint.classList.remove("error");
+  logEl.hint.textContent = t("common.loading");
+  const { ok, status, body } = await api("/api/v1/logs?limit=" + LOG_LIMIT);
+  if (status === 401) {
+    logEl.sheet.close();
+    setHint(t("token.invalidReenter"), true);
+    openTokenDialog();
+    return;
+  }
+  if (!ok || !body) {
+    logEl.hint.classList.add("error");
+    logEl.hint.textContent = (body && body.message) || t("log.loadFailed");
+    return;
+  }
+  const entries = (body.entries || []).slice().reverse(); // newest first
+  logEl.list.replaceChildren(...entries.map(renderLogEntry));
+  logEl.hint.textContent = entries.length
+    ? t(body.file ? "log.infoFile" : "log.infoMemory")
+    : t("log.empty");
+}
+
+if (logEl.btn && logEl.sheet) {
+  logEl.btn.addEventListener("click", () => {
+    logEl.sheet.showModal();
+    loadLog();
+  });
+  logEl.refresh.addEventListener("click", loadLog);
+}
+
 if (el.sceneName) {
   el.sceneName.addEventListener("input", () => {
     if (sceneIdManual || !el.sceneId) return;
@@ -2962,9 +3043,12 @@ if (el.themeToggle) {
 
 // First render only after the dictionaries are loaded (i18n.js); until then
 // the page shows the English static texts from index.html.
-I18N.ready.then(() => {
+I18N.ready.then(async () => {
   initTheme();
   initRouting();
+
+  // First-run setup (setup.js): the app starts only after the wizard.
+  const setup = window.HallidoSetup ? await window.HallidoSetup.start() : null;
 
   refreshStatus();
   loadScenes();
@@ -2972,4 +3056,8 @@ I18N.ready.then(() => {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) refreshStatus();
   });
+  if (setup && setup.next === "scene") {
+    showTab("szenen");
+    openNewSceneDialog();
+  }
 });

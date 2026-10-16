@@ -17,7 +17,7 @@ const fs = require("fs");
 const path = require("path");
 
 const STATIC = path.join(__dirname, "..", "..", "internal", "web", "static");
-const SCRIPTS = ["app.js", "pwa.js", "icons.js"];
+const SCRIPTS = ["app.js", "setup.js", "pwa.js", "icons.js"];
 // Literal values that may be assigned although they contain letters
 // (brand names, technical tokens). Keep this list short.
 const ALLOWED_LITERALS = new Set(["Hallido", "URL", "API"]);

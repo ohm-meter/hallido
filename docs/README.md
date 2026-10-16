@@ -19,11 +19,13 @@ Structured after [Diátaxis](https://diataxis.fr/): four types for different goa
 
 Installation and operations:
 
+- [Install on a NAS (Synology, QNAP)](nas/README.md) — step by step for non-technical users, English and German
+- [Verify the image before installing](how-to/verify-image.md) — cosign signature, digest, SBOM
 - [Install on any Linux machine](how-to/install-linux.md) — prebuilt binaries (x86_64/ARM), systemd, firewall
 - [Install on a Raspberry Pi](how-to/install-raspberry-pi.md) — systemd, token, go-live checklist
 - [Install with the script](how-to/install-one-liner.md) — `scripts/install.sh`, paths, `sonos-agent update`
 - [Migrate the installation layout](how-to/install-layout-migration.md) — move older installations to the config in `/var/lib/sonos-agent`
-- [Run with Docker](how-to/run-with-docker.md) — host networking for SSDP
+- [Run with Docker](how-to/run-with-docker.md) — signed image, host networking for SSDP, environment variables
 - [Remote access](how-to/remote-access.md) — reverse proxy, tunnel, or VPN instead of port forwarding
 - [Operations & troubleshooting](runbook.md) — logs, updates, common errors
 - [Start locally (dev & prod)](how-to/local-start.md)
@@ -58,6 +60,7 @@ Speakers and network:
 
 ## Explanation
 
+- [What Hallido does on your network and your NAS](explanation/what-hallido-does.md) — ports, connections, files, rights, data
 - [Architecture](explanation/architecture.md) — layers, drivers, error model
 - [What lives where](explanation/project-structure.md) — repo overview, scripts, startup path
 - [ADRs](adr/) — documented architecture decisions

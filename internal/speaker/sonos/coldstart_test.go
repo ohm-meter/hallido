@@ -71,6 +71,7 @@ func coldController(f *slowSonos) *Controller {
 		"Wohnzimmer": {name: "Wohnzimmer", baseURL: f.srv.URL, uid: "RINCON_W"},
 	})
 	c.client.Timeout = 100 * time.Millisecond
+	c.playClient.Timeout = 100 * time.Millisecond
 	c.retryPause = time.Millisecond
 	return c
 }
@@ -94,7 +95,7 @@ func TestPlay_RetriesSlowSetAVTransportURI(t *testing.T) {
 }
 
 func TestPlay_SlowPlayStillPlayingIsSuccess(t *testing.T) {
-	// Play antwortet beide Male zu spaet, die Box spielt aber.
+	// Play antwortet zu spaet, die Box spielt aber: kein zweites Play.
 	f := newSlowSonos(time.Second, map[string]int{"Play": 2})
 	f.state = "PLAYING"
 	defer f.srv.Close()
@@ -103,8 +104,42 @@ func TestPlay_SlowPlayStillPlayingIsSuccess(t *testing.T) {
 	if err := c.Play(context.Background(), "Wohnzimmer", coldSrc); err != nil {
 		t.Fatalf("Play: %v", err)
 	}
-	if got := f.count("Play"); got != 2 {
-		t.Errorf("Play-Aufrufe = %d, want 2", got)
+	if got := f.count("Play"); got != 1 {
+		t.Errorf("Play-Aufrufe = %d, want 1", got)
+	}
+}
+
+func TestPlay_SlowPlayTransitioningIsNotRepeated(t *testing.T) {
+	// Coordinator einer grossen Gruppe puffert noch (Hardware 2026-10-15):
+	// kein zweites Play, die Pruefung nach Play entscheidet.
+	f := newSlowSonos(time.Second, map[string]int{"Play": 1})
+	f.state = "TRANSITIONING"
+	defer f.srv.Close()
+	c := coldController(f)
+
+	err := c.Play(context.Background(), "Wohnzimmer", coldSrc)
+	if got := f.count("Play"); got != 1 {
+		t.Errorf("Play-Aufrufe = %d, want 1", got)
+	}
+	// bleibt TRANSITIONING -> Pruefung nach Play meldet playback_failed
+	if got := apperr.As(err).Code; got != apperr.CodePlaybackFailed {
+		t.Errorf("code = %q, want playback_failed (err=%v)", got, err)
+	}
+}
+
+func TestPlay_SlowPlayWithinPlayTimeout(t *testing.T) {
+	// Play braucht laenger als das allgemeine SOAP-Zeitlimit, aber weniger als
+	// playSOAPTimeout: ein einziger Aufruf, keine Warnung, kein Fehler.
+	f := newSlowSonos(300*time.Millisecond, map[string]int{"Play": 1})
+	defer f.srv.Close()
+	c := coldController(f)
+	c.playClient.Timeout = 2 * time.Second
+
+	if err := c.Play(context.Background(), "Wohnzimmer", coldSrc); err != nil {
+		t.Fatalf("Play: %v", err)
+	}
+	if got := f.count("Play"); got != 1 {
+		t.Errorf("Play-Aufrufe = %d, want 1", got)
 	}
 }
 
@@ -159,6 +194,7 @@ func TestPlay_NoRetryWhenContextExpired(t *testing.T) {
 	defer f.srv.Close()
 	c := coldController(f)
 	c.client.Timeout = 5 * time.Second
+	c.playClient.Timeout = 5 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 

@@ -29,6 +29,100 @@ paths:
                     type: array
                     items: { type: string }
                   discovery_error: { type: string }
+  /api/v1/setup:
+    get:
+      summary: First-run setup status (ADR 0022)
+      description: >
+        Public. setup_required is true only while the agent runs with setup
+        enabled (container image) and no API token exists yet. open is true
+        if this request may create the token now (home network, time window).
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  setup_required: { type: boolean }
+                  open: { type: boolean }
+                  reason: { type: string, enum: [expired, not_local] }
+                  expires_in_seconds: { type: integer }
+  /api/v1/setup/token:
+    post:
+      summary: Create the API token once (first-run setup, ADR 0022)
+      description: >
+        Works exactly once, only while setup is open, only from the home
+        network (private/loopback/link-local client address, no proxy headers,
+        local host name, same origin) and only with the header
+        X-Hallido-Setup: 1. The token is generated on the server (160 random
+        bits), stored in config.json (0600) and returned only in this
+        response. Afterwards every endpoint requires it.
+      security: []
+      parameters:
+        - in: header
+          name: X-Hallido-Setup
+          required: true
+          schema: { type: string, enum: ["1"] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                timezone:
+                  type: string
+                  description: IANA time zone of the browser; used only if the config has none (invalid values are ignored)
+                  example: Europe/Berlin
+      responses:
+        "201":
+          description: Token created (shown only now; Cache-Control no-store)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string, example: "7KQ2-M9XP-…" }
+        "400": { description: Header missing or invalid body, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "403": { description: "forbidden (not from the home network) or setup_closed (time window expired)", content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "409": { description: already_set_up, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { description: rate_limited }
+  /api/v1/logs:
+    get:
+      summary: Setup and operations log (ADR 0023)
+      description: >
+        Newest entries (level info and above), oldest first. Secret-looking
+        attributes are stored as "[redacted]". file is true if the entries are
+        also written to a log file (container: /data/logs/hallido.log).
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 500, default: 200 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  file: { type: boolean }
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        time: { type: string, format: date-time }
+                        level: { type: string, enum: [INFO, WARN, ERROR] }
+                        msg: { type: string }
+                        attrs:
+                          type: object
+                          additionalProperties: { type: string }
+        "400": { description: invalid limit, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /api/v1/scenes:
     get:
       summary: List configured scenes
@@ -1085,7 +1179,7 @@ components:
     Error:
       type: object
       properties:
-        error: { type: string, description: "stable code, e.g. speaker_unreachable, schedule_not_found, not_found (404), rate_limited (429, Retry-After header; 300 requests/min/IP)" }
+        error: { type: string, description: "stable code, e.g. speaker_unreachable, schedule_not_found, not_found (404), rate_limited (429, Retry-After header; 300 requests/min/IP), forbidden / setup_closed (403) and already_set_up (409) for first-run setup" }
         message: { type: string }
         speaker: { type: string }
         hint: { type: string }

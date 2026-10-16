@@ -91,6 +91,11 @@ UPnP/SOAP, enabled with `--driver=sonos`. Implemented:
 - **Install layout** (ADR 0017): code root-owned in `/usr/local/sonos-agent`, config in `/var/lib/sonos-agent`
 - **Stream probe + check after play** (#17): AAC as `aac://`, play without `PLAYING` → `playback_failed` with hint — `docs/how-to/troubleshoot-stream-not-playing.md`
 
+**Increment 4 (in review, October 2026): NAS installation for non-technical users**
+- Container image `ghcr.io/ohm-meter/hallido` (distroless, UID 65532, read-only, no capabilities, amd64/arm64/armv7), signed keyless with cosign, SBOM, Grype + govulncheck (ADR 0021)
+- Release file `compose.yaml` pinned by digest (`deploy/nas/compose.template.yaml`, `scripts/render-compose.sh`)
+- First-run setup wizard (`-setup`/`SRA_SETUP`, only in the image; ADR 0022) and setup/operations log (`-log-dir`, Speakers → Log; ADR 0023)
+- Guides `docs/nas/{en,de}/`, `docs/explanation/what-hallido-does.md`, `docs/how-to/verify-image.md`
 No external module, one static binary. Pi build: `make build-pi`
 (arm64; 32-bit via `make build-pi PI_ARCH=arm PI_ARM=7`); all platforms: `make dist`.
 

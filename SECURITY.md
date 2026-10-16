@@ -69,6 +69,76 @@ What the code does about it:
    `sonos-agent update` runs as admin. `sonos-agent migrate` converts older
    installations (the installer and `update` call it automatically) —
    [Migrate the installation layout](docs/how-to/install-layout-migration.md).
-8. **Docker:** `deploy/docker-compose.yml` requires `SRA_API_TOKEN` from the
-   environment and is meant for testing; real speakers need
-   `network_mode: host` — the agent then listens on all interfaces of the host.
+8. **Docker / NAS:** use the release `compose.yaml` (image pinned by digest,
+   signed) or the same settings in your own file: `user: 65532`,
+   `read_only`, `cap_drop: ALL`, `no-new-privileges`, limits, one data
+   volume. Real speakers need `network_mode: host` — the agent then listens
+   on all interfaces of the host (port 8790). `deploy/docker-compose.yml` is
+   only for local tests with the mock driver.
+9. **First-run setup:** finish the setup wizard right after installing, and
+   do not enable remote access (QuickConnect, tunnels, port forwarding)
+   before. See “First-run setup” below.
+
+## Container image and supply chain
+
+Details: [ADR 0021](docs/adr/0021-container-image-supply-chain.md).
+
+- The image `ghcr.io/ohm-meter/hallido` is built only by the release workflow
+  of this repository: static Go binary without third-party Go modules on
+  distroless (no shell, no package manager), base images pinned by digest,
+  user 65532, health check without a shell.
+- The image digest, `compose.yaml` and `SHA256SUMS` are signed **keyless**
+  with Sigstore cosign; the certificate names the workflow
+  `.github/workflows/release.yml` and the tag, and every signature is in the
+  public Rekor log. No signing key exists that could leak.
+  [Verify the image](docs/how-to/verify-image.md).
+- An SPDX SBOM is attached to every release and as a signed attestation;
+  BuildKit adds SLSA provenance. A high/critical vulnerability with an
+  available fix (Grype) stops the release before signing. CI runs
+  `govulncheck` and Grype on every pull request.
+- GitHub Actions are pinned by commit SHA; jobs get minimal permissions.
+- At run time Hallido contacts only the speakers on the LAN, the stream
+  addresses of your own scenes (format check) and — optional, can be turned
+  off with `SRA_RADIO_SEARCH=0` — the Radio Browser directory. No telemetry,
+  no update check. Full list:
+  [What Hallido does](docs/explanation/what-hallido-does.md).
+
+## First-run setup
+
+Details and threat model: [ADR 0022](docs/adr/0022-first-run-setup.md).
+
+The container starts without an access key. Until the setup wizard has
+created one, every API endpoint except the setup status refuses requests.
+`POST /api/v1/setup/token` creates the key **once** (160 random bits from the
+OS, stored with mode 0600, shown once, never logged) and only if the request
+
+- arrives within one hour after the start (restart to reopen),
+- comes from a private, loopback or link-local address without proxy
+  headers (`X-Forwarded-For`, `Forwarded`, `CF-Connecting-IP`, …),
+- uses a local host name or IP (blocks DNS rebinding) and the same origin,
+- carries the header `X-Hallido-Setup: 1` (other websites cannot send it
+  without a CORS preflight, which is never answered).
+
+**Known limits (accepted):** the home network is trusted — any device in it
+can claim the key first during the window; the wizard then shows “already
+set up” and the log records the client address. A port forwarder on the
+same host that hides the client address and adds no proxy header (e.g. a
+user-made SSH tunnel) would let a remote client pass the address check
+during that hour; the NAS project file uses host networking and the guide
+asks you to finish the setup before enabling remote access.
+
+## Operations log
+
+`/data/logs/hallido.log` (rotated, max. about 4 MB, mode 0600) and the web
+app view (Speakers → Log, token required) contain events, scene and speaker
+names and, for the setup, the client IP address. Values of attributes named
+like secrets (token, password, authorization, …) are replaced by
+`[redacted]` — [ADR 0023](docs/adr/0023-operations-log.md).
+
+## Security review of the NAS installation (2026-10)
+
+Reviewed: setup endpoint and its network checks, token generation and
+storage, token check after setup, log redaction and the log view (no HTML
+injection: texts are inserted as text), container rights, compose file,
+release and CI workflows. Result: no exploitable finding; the two accepted
+limits are listed under “First-run setup”.
